@@ -54,8 +54,8 @@ end
 
 local function parseLanguageConfig(value)
     local raw = trim(value or "all")
-    if raw == "" then return "all", {} end
-    if raw == "all" then return "all", { "de", "en", "fr", "ja" } end
+    if raw == "" then return "all", { "en", "de", "fr", "ja" } end
+    if raw == "all" then return "all", { "en", "de", "fr", "ja" } end
 
     local langs = {}
     for part in raw:gmatch("[^,]+") do
@@ -64,12 +64,12 @@ local function parseLanguageConfig(value)
     end
 
     if #langs == 0 then
-        return "all", { "de", "en", "fr", "ja" }
+        return "all", { "en", "de", "fr", "ja" }
     end
     if #langs == 1 then
         return "single", langs
     end
-    return "fallback", langs
+    return "multi", langs
 end
 
 local function searchWithFallback(name, maxResults, order)
@@ -89,7 +89,7 @@ local mode, languages = parseLanguageConfig(LANGUAGE)
 
 if mode == "all" then
     results, usedLanguage = searchWithFallback(ITEM_NAME, MAX_RESULTS, languages)
-elseif mode == "fallback" then
+elseif mode == "multi" then
     results, usedLanguage = searchWithFallback(ITEM_NAME, MAX_RESULTS, languages)
 else
     usedLanguage = languages[1]
@@ -114,7 +114,7 @@ end
 -- 2. Ergebnisse anzeigen
 log.info("=== ERGEBNIS: %d Treffer ===", #results)
 
-if mode == "all" then
+if mode ~= "single" then
     -- Alle Sprachen abfragen und als Lua-Block formatieren
     local clipLines = {}
 

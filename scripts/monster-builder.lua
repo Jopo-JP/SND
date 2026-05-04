@@ -55,7 +55,7 @@ local function escapeLuaString(value)
 end
 
 local function searchItemWithFallback(name)
-    local order = { "de", "en", "fr", "ja" }
+    local order = { "en", "de", "fr", "ja" }
     for _, lang in ipairs(order) do
         local results = xivapi.searchItems(name, lang, 1)
         if results and #results > 0 then

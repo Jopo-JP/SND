@@ -75,16 +75,18 @@ end
 function M.findIdBySearch(itemName, language)
     log.info("Suche '%s' via XIVAPI...", itemName)
 
-    local results = xivapi.searchItems(itemName, language or "de", 5)
-    if not results or #results == 0 then
-        log.warn("Keine XIVAPI-Treffer fuer '%s'", itemName)
-        return nil
+    local order = language and { language } or { "en", "de", "fr", "ja" }
+    for _, lang in ipairs(order) do
+        local results = xivapi.searchItems(itemName, lang, 5)
+        if results and #results > 0 then
+            local best = results[1]
+            log.info("XIVAPI Treffer ueber '%s': '%s' ID=%d (Score: %.2f)", lang, best.name, best.id, best.score)
+            return best.id
+        end
     end
 
-    -- Besten Treffer nehmen (hoechster Score)
-    local best = results[1]
-    log.info("XIVAPI Treffer: '%s' ID=%d (Score: %.2f)", best.name, best.id, best.score)
-    return best.id
+    log.warn("Keine XIVAPI-Treffer fuer '%s'", itemName)
+    return nil
 end
 
 --- Versucht eine Item-ID aufzuloesen: erst Inventar (lokal), dann XIVAPI.
