@@ -1,9 +1,10 @@
 -- ======================================================================
 -- SND Inventory Module
--- Item-Suche (Inventar, Excel-Sheet) und Zählung
+-- Item-Zaehlung (lokal) und ID-Aufloesung (Inventar -> XIVAPI Fallback)
 -- ======================================================================
-local log   = require("lib/logger")
-local utils = require("lib/utils")
+local log    = require("lib/logger")
+local utils  = require("lib/utils")
+local xivapi = require("lib/xivapi")
 
 local M = {}
 
@@ -13,7 +14,7 @@ local BAG_NAMES = {
     "EquippedItems", "Crystals", "Currency", "KeyItems",
 }
 
---- Gibt die Anzahl eines Items per ID zurück (schnell).
+--- Gibt die Anzahl eines Items per ID zurueck (schnell, lokal).
 -- @param itemId number Item-ID
 -- @return number Anzahl
 function M.getCount(itemId)
@@ -23,19 +24,17 @@ function M.getCount(itemId)
     return ok and tonumber(count) or 0
 end
 
---- Löst einen Item-Namen zu einer ID auf via Excel-Sheet.
+--- Liest einen Item-Namen per ID via XIVAPI (kein Lag).
 -- @param itemId number Item-ID
+-- @param language string|nil Sprache (default "de")
 -- @return string|nil Item-Name oder nil
-function M.getNameById(itemId)
-    local ok, row = pcall(function() return Excel.GetRow("Item", itemId) end)
-    if ok and row then
-        local okN, n = pcall(function() return row.Name end)
-        if okN and n then return tostring(n) end
-    end
+function M.getNameById(itemId, language)
+    local item = xivapi.getItem(itemId, language or "de")
+    if item then return item.name end
     return nil
 end
 
---- Sucht eine Item-ID per Name im Inventar.
+--- Sucht eine Item-ID per Name im Inventar (lokal, schnell).
 -- @param itemName string Name des Items
 -- @return number|nil Item-ID oder nil
 function M.findIdInInventory(itemName)
@@ -54,6 +53,7 @@ function M.findIdInInventory(itemName)
                         if not isEmpty then
                             local id = 0
                             pcall(function() id = item.ItemId end)
+                            -- Nutze XIVAPI statt Excel.GetRow fuer den Namen
                             local name = M.getNameById(id)
                             if name and utils.matchName(name, itemName) then
                                 log.info("Gefunden: '%s' ID=%d", name, id)
@@ -68,34 +68,31 @@ function M.findIdInInventory(itemName)
     return nil
 end
 
---- Sucht eine Item-ID per Name im Excel Item-Sheet (langsam, ~15s).
+--- Sucht eine Item-ID per Name via XIVAPI Search (schnell, kein Lag).
 -- @param itemName string Name des Items
--- @param maxId number|nil Höchste zu prüfende ID (default 40000)
+-- @param language string|nil Sprache (default "de")
 -- @return number|nil Item-ID oder nil
-function M.findIdInExcel(itemName, maxId)
-    maxId = maxId or 40000
-    log.info("Suche '%s' im Excel Item-Sheet (dauert ca. 15s)...", itemName)
-    local batchSize = 2000
+function M.findIdBySearch(itemName, language)
+    log.info("Suche '%s' via XIVAPI...", itemName)
 
-    for batchStart = 0, maxId, batchSize do
-        local batchEnd = math.min(batchStart + batchSize - 1, maxId)
-        for id = batchStart, batchEnd do
-            local name = M.getNameById(id)
-            if name and utils.matchName(name, itemName) then
-                log.info("Gefunden: '%s' ID=%d", name, id)
-                return id
-            end
-        end
-        yield("/wait 0.05")
+    local results = xivapi.searchItems(itemName, language or "de", 5)
+    if not results or #results == 0 then
+        log.warn("Keine XIVAPI-Treffer fuer '%s'", itemName)
+        return nil
     end
-    return nil
+
+    -- Besten Treffer nehmen (hoechster Score)
+    local best = results[1]
+    log.info("XIVAPI Treffer: '%s' ID=%d (Score: %.2f)", best.name, best.id, best.score)
+    return best.id
 end
 
---- Versucht eine Item-ID aufzulösen: erst Inventar, dann Excel.
+--- Versucht eine Item-ID aufzuloesen: erst Inventar (lokal), dann XIVAPI.
 -- @param itemName string Name des Items
+-- @param language string|nil Sprache (default "de")
 -- @return number|nil Item-ID oder nil
-function M.resolveId(itemName)
-    return M.findIdInInventory(itemName) or M.findIdInExcel(itemName)
+function M.resolveId(itemName, language)
+    return M.findIdInInventory(itemName) or M.findIdBySearch(itemName, language)
 end
 
 return M

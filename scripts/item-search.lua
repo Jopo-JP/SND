@@ -1,63 +1,61 @@
 --[=====[
 [[SND Metadata]]
 author: Jopo-JP
-version: 1.1.0
+version: 2.0.0
 description: >-
-  Item-Suche - Findet Item-IDs per Name im Excel Item-Sheet.
-  Konfiguration über SND Config-UI.
+  Item-Suche via XIVAPI - Findet Item-IDs per Name ohne Lag.
+  Nutzt https://v2.xivapi.com statt lokaler Excel-Sheets.
+  Konfiguration ueber SND Config-UI.
 configs:
   itemName:
     default: "Glotzaugen-Tränen"
     description: Name des Items das gesucht werden soll
     type: string
     required: true
-  maxId:
-    default: 40000
-    description: Hoechste Item-ID die durchsucht wird
+  language:
+    default: "de"
+    description: Sprache (de, en, fr, ja)
+    type: string
+    required: false
+  maxResults:
+    default: 10
+    description: Maximale Anzahl Ergebnisse
     type: int
-    min: 1000
-    max: 100000
+    min: 1
+    max: 50
     required: false
 
 [[End Metadata]]
 --]=====]
 -- ======================================================================
--- Item Search Tool
+-- Item Search Tool v2 - via XIVAPI (kein Lag!)
 -- ======================================================================
 
-local log   = require("lib/logger")
-local utils = require("lib/utils")
+local log    = require("lib/logger")
+local xivapi = require("lib/xivapi")
 
 log.level = "INFO"
 
-local ITEM_NAME = Config.Get("itemName")
-local MAX_ID    = Config.Get("maxId")
-local found     = {}
-local batchSize = 200
+local ITEM_NAME   = Config.Get("itemName")
+local LANGUAGE    = Config.Get("language")
+local MAX_RESULTS = Config.Get("maxResults")
 
-log.info("Suche '%s' in Item-Sheet (0-%d)...", ITEM_NAME, MAX_ID)
+log.info("Suche '%s' via XIVAPI (Sprache: %s)...", ITEM_NAME, LANGUAGE)
 
-for batchStart = 0, MAX_ID, batchSize do
-    local batchEnd = math.min(batchStart + batchSize - 1, MAX_ID)
-    for id = batchStart, batchEnd do
-        local ok, row = pcall(function() return Excel.GetRow("Item", id) end)
-        if ok and row then
-            local okN, name = pcall(function() return row.Name end)
-            if okN and name then
-                local nStr = tostring(name)
-                if utils.matchName(nStr, ITEM_NAME) then
-                    table.insert(found, { id = id, name = nStr })
-                    log.info(">>> GEFUNDEN: ID=%d Name='%s'", id, nStr)
-                end
-            end
-        end
-    end
-    log.info("Batch %d-%d durchsucht. Treffer: %d", batchStart, batchEnd, #found)
-    yield("/wait 0.1")
+local results = xivapi.searchItems(ITEM_NAME, LANGUAGE, MAX_RESULTS)
+
+if not results then
+    log.error("XIVAPI-Anfrage fehlgeschlagen! Ist eine Internetverbindung vorhanden?")
+    return
 end
 
 log.info("=== ERGEBNIS ===")
-log.info("Suche nach '%s': %d Treffer", ITEM_NAME, #found)
-for _, f in ipairs(found) do
-    log.info("  ID %d = '%s'", f.id, f.name)
+log.info("Suche nach '%s': %d Treffer", ITEM_NAME, #results)
+
+for i, r in ipairs(results) do
+    log.info("  #%d  ID %-6d  '%s'  (Score: %.2f)", i, r.id, r.name, r.score)
+end
+
+if #results == 0 then
+    log.warn("Keine Treffer. Pruefen: Rechtschreibung, Sprache (%s), oder anderen Suchbegriff verwenden.", LANGUAGE)
 end
