@@ -24,8 +24,9 @@ local function urlEncode(str)
 end
 
 --- HTTP GET via PowerShell Invoke-RestMethod.
--- Die JSON-Antwort wird in UTF-8 serialisiert, danach base64-encodiert und
--- erst in Lua decodiert. So umgehen wir komplett Windows-Codepage-Probleme.
+-- Die HTTP-Antwort wird als rohe UTF-8-Bytes gelesen und dann in Base64 ueber
+-- stdout ausgegeben. So umgehen wir sowohl Console-Codepages als auch das
+-- Re-Encoding von ConvertTo-Json fuer Unicode-Zeichen.
 -- @param url string Vollstaendige URL
 -- @return string|nil JSON-Body oder nil bei Fehler
 local function base64Decode(data)
@@ -52,11 +53,11 @@ end
 local function httpGet(url)
     log.debug("HTTP GET: %s", url)
 
-    -- PowerShell serialisiert die API-Antwort als kompaktes JSON und gibt
-    -- anschliessend nur base64 auf stdout aus. Damit werden Umlaute und
-    -- japanische Zeichen nicht mehr von der Windows-Console-Codepage zerstoert.
+    -- Wichtig: Wir lesen die HTTP-Response als Byte-Array und encodieren diese
+    -- Bytes direkt als Base64. Damit bleibt die originale UTF-8-Antwort exakt
+    -- erhalten und Lua bekommt danach wieder das unveraenderte JSON.
     local cmd = string.format(
-        'powershell.exe -NoProfile -Command "$r = Invoke-RestMethod -Uri \'%s\'; $json = $r | ConvertTo-Json -Depth 10 -Compress; [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($json))"',
+        'powershell.exe -NoProfile -Command "try { [Convert]::ToBase64String((New-Object System.Net.WebClient).DownloadData(\'%s\')) } catch { \"ERROR:\" + $_.Exception.Message }"',
         url
     )
 
@@ -71,6 +72,11 @@ local function httpGet(url)
 
     if not body or body == "" then
         log.error("Leere Antwort von XIVAPI")
+        return nil
+    end
+
+    if body:match("^ERROR:") then
+        log.error("XIVAPI Request fehlgeschlagen: %s", body)
         return nil
     end
 

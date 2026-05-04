@@ -54,6 +54,17 @@ local function escapeLuaString(value)
         :gsub('"', '\\"')
 end
 
+local function searchItemWithFallback(name)
+    local order = { "de", "en", "fr", "ja" }
+    for _, lang in ipairs(order) do
+        local results = xivapi.searchItems(name, lang, 1)
+        if results and #results > 0 then
+            return results[1], lang
+        end
+    end
+    return nil, nil
+end
+
 -- ======================================================================
 -- Waypoint-Parsing (gleiche Logik wie positions-helper)
 -- ======================================================================
@@ -122,10 +133,10 @@ if ITEM_NAME and ITEM_NAME ~= "" then
     else
         -- Per Name suchen, dann ID laden
         log.info("Suche '%s' via XIVAPI...", ITEM_NAME)
-        local results = xivapi.searchItems(ITEM_NAME, "de", 1)
-        if results and #results > 0 then
-            log.info("Gefunden: ID %d - Lade alle Sprachen...", results[1].id)
-            itemData = xivapi.getItemAllLanguages(results[1].id)
+        local result, lang = searchItemWithFallback(ITEM_NAME)
+        if result then
+            log.info("Gefunden ueber Sprache '%s': ID %d - Lade alle Sprachen...", lang, result.id)
+            itemData = xivapi.getItemAllLanguages(result.id)
         else
             log.warn("Item '%s' nicht gefunden - Entry wird ohne Item erstellt.", ITEM_NAME)
         end

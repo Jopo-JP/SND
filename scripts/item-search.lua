@@ -48,8 +48,31 @@ local ITEM_NAME   = Config.Get("itemName")
 local LANGUAGE    = Config.Get("language")
 local MAX_RESULTS = Config.Get("maxResults")
 
-local function searchWithFallback(name, maxResults)
-    local order = { "de", "en", "fr", "ja" }
+local function trim(value)
+    return tostring(value):match("^%s*(.-)%s*$")
+end
+
+local function parseLanguageConfig(value)
+    local raw = trim(value or "all")
+    if raw == "" then return "all", {} end
+    if raw == "all" then return "all", { "de", "en", "fr", "ja" } end
+
+    local langs = {}
+    for part in raw:gmatch("[^,]+") do
+        local lang = trim(part)
+        if lang ~= "" then langs[#langs + 1] = lang end
+    end
+
+    if #langs == 0 then
+        return "all", { "de", "en", "fr", "ja" }
+    end
+    if #langs == 1 then
+        return "single", langs
+    end
+    return "fallback", langs
+end
+
+local function searchWithFallback(name, maxResults, order)
     for _, lang in ipairs(order) do
         log.info("Suche '%s' via XIVAPI (Sprache: %s)...", name, lang)
         local found = xivapi.searchItems(name, lang, maxResults)
@@ -62,11 +85,14 @@ end
 
 local results
 local usedLanguage
+local mode, languages = parseLanguageConfig(LANGUAGE)
 
-if LANGUAGE == "all" then
-    results, usedLanguage = searchWithFallback(ITEM_NAME, MAX_RESULTS)
+if mode == "all" then
+    results, usedLanguage = searchWithFallback(ITEM_NAME, MAX_RESULTS, languages)
+elseif mode == "fallback" then
+    results, usedLanguage = searchWithFallback(ITEM_NAME, MAX_RESULTS, languages)
 else
-    usedLanguage = LANGUAGE
+    usedLanguage = languages[1]
     log.info("Suche '%s' via XIVAPI (Sprache: %s)...", ITEM_NAME, usedLanguage)
     results = xivapi.searchItems(ITEM_NAME, usedLanguage, MAX_RESULTS)
 end
@@ -81,14 +107,14 @@ if #results == 0 then
     return
 end
 
-if usedLanguage and LANGUAGE == "all" then
+if usedLanguage and mode ~= "single" then
     log.info("Treffer ueber Sprache '%s' gefunden.", usedLanguage)
 end
 
 -- 2. Ergebnisse anzeigen
 log.info("=== ERGEBNIS: %d Treffer ===", #results)
 
-if LANGUAGE == "all" then
+if mode == "all" then
     -- Alle Sprachen abfragen und als Lua-Block formatieren
     local clipLines = {}
 
