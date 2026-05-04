@@ -306,12 +306,42 @@ Verbesserungspaeter:
 - zuerst `de`, danach Fallback `en`, `fr`, `ja`
 - oder direkte ID-Eingabe priorisieren
 
+### 5. Farm-Loop priorisiert Mobs noch nicht stabil genug
+
+Status: offen.
+
+Beobachtetes Verhalten:
+
+- beim Laufen zu Waypoints werden Mobs zwar erkannt (`Mob erkannt ... Stoppe.`)
+- danach wird aber nicht zuverlaessig in einen stabilen Kill-Flow gewechselt
+- teils laeuft das Skript kurz weiter, stoppt erneut und wiederholt das
+- Angriffe werden zu selten oder unzuverlaessig ausgeloest
+- dadurch werden einzelne Mobs uebersprungen oder nicht sauber verfolgt
+
+Gewuenschtes Verhalten:
+
+1. Mob in Reichweite erkennen
+2. diesen konkreten Mob priorisieren
+3. zu ihm hinlaufen, falls ausserhalb der Pull-/Kill-Range
+4. wenn er vor Ankunft stirbt: Lauf abbrechen und naechsten Mob suchen
+5. wenn Kampf startet: im Kampf-/Clear-Modus bleiben
+6. alle passenden Mobs in der Naehe toeten
+7. erst wenn kein passender Mob mehr in der Naehe ist, zum naechsten Waypoint
+
+Vermutung:
+
+- der aktuelle Mix aus Scan-, Move-, Retarget- und Kill-Logik ist noch zu implizit
+- wahrscheinlich ist ein klarer Zustandsautomat sinnvoller:
+  `scan -> chase current target -> kill -> repeat scan -> advance waypoint`
+
 ## TODO
 
 - Client-Sprache direkt aus SND/Dalamud lesen, falls spaeter verfuegbar
 - Zone/Territory pro Monster erfassen (ID + Name) und vor dem Farmen pruefen;
   wenn der Spieler in der falschen Zone ist, soll das Skript mit klarer Meldung
   abbrechen statt still weiterzulaufen
+- Farm-Loop spaeter als expliziten Zustandsautomaten umbauen, damit Mobs immer
+  vor Waypoints priorisiert werden und das aktuelle Ziel stabil verfolgt wird
 - Fallback-Suchstrategie fuer `item-search.lua` verbessern
 - eventuell C#-seitiges HTTP-Modul fuer SND bauen, um PowerShell komplett zu vermeiden
 - optional Caching fuer XIVAPI-Antworten einfuehren

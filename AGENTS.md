@@ -113,6 +113,16 @@ Deshalb:
 - Mehrsprachige Monster-Namen werden aktuell ueber `/target`-Fallbacks geloest.
 - Das ist funktional, aber nicht so elegant wie echte Client-Spracherkennung.
 
+### Farm-Loop priorisiert Mobs noch nicht stabil genug
+
+- Beobachtet wurde: Mobs werden erkannt, aber nicht immer stabil verfolgt und
+  zuverlaessig getoetet.
+- Das aktuelle Zusammenspiel aus `moveTo`, `scanAndKill`, `walkToTarget` und
+  Retargeting ist noch fehleranfaellig.
+- Wunschbild: immer zuerst Mob priorisieren, aktuellen Mob stabil verfolgen,
+  alle Mobs im lokalen Bereich clearen und erst danach zum naechsten Waypoint.
+- Vermutlich spaeter als expliziten Zustandsautomaten neu aufbauen.
+
 ## Erwartungen an weitere Aenderungen
 
 - Kleine, gezielte Aenderungen bevorzugen.
@@ -126,6 +136,8 @@ Deshalb:
 - Client-Sprache direkt aus SND/Dalamud lesen, falls spaeter verfuegbar
 - Zone/Territory pro Monster erfassen (ID + Name) und vor dem Farmen pruefen;
   bei falscher Zone soll das Skript mit klarer Meldung abbrechen
+- Farm-Loop spaeter als expliziten Zustandsautomaten umbauen, damit Mobs immer
+  vor Waypoints priorisiert werden und das aktuelle Ziel stabil verfolgt wird
 - Item-Suche `language = all` mit Fallback-Reihenfolge statt nur `de`
 - Mehrere Drops pro Monster ueber Builder unterstuetzen
 - XIVAPI optional cachen
