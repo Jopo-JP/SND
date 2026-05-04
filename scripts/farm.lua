@@ -88,6 +88,7 @@ nav.DETECTION_RANGE    = Config.Get("detectionRange")
 -- ======================================================================
 
 --- Findet das Monster und Drop in der Datenbank.
+-- Unterstuetzt Suche per Item-ID (Zahl) oder Item-Name (alle Sprachen).
 -- @param farmItem string|number Item-Name oder Item-ID
 -- @return table|nil monster, number itemId, string itemName
 local function resolveFarmTarget(farmItem)
@@ -97,22 +98,24 @@ local function resolveFarmTarget(farmItem)
     if tonumber(farmItem) then
         -- Numerische ID
         itemId = tonumber(farmItem)
-        itemName = inventory.getNameById(itemId) or ("Item#" .. itemId)
-
         for _, m in ipairs(MONSTER_DB) do
             for _, d in ipairs(m.drops) do
                 if d.id == itemId then
+                    itemName = utils.displayName(d.name)
                     return m, itemId, itemName
                 end
             end
         end
+        itemName = "Item#" .. itemId
     else
-        -- String-Name
+        -- String-Name: Suche in allen Sprachen
         itemName = farmItem
         for _, m in ipairs(MONSTER_DB) do
             for _, d in ipairs(m.drops) do
-                if utils.matchName(d.name, farmItem) then
-                    return m, d.id, itemName
+                local match, lang = utils.matchMultiName(d.name, farmItem)
+                if match then
+                    log.info("Item '%s' gefunden (Sprache: %s)", farmItem, lang or "?")
+                    return m, d.id, utils.displayName(d.name)
                 end
             end
         end
@@ -134,7 +137,7 @@ local ok, err = xpcall(function()
         log.error("Verfuegbare Items:")
         for _, m in ipairs(MONSTER_DB) do
             for _, d in ipairs(m.drops) do
-                log.error("  %s -> %s (ID:%d)", m.name, d.name, d.id)
+                log.error("  %s -> %s (ID:%d)", m.name, utils.displayName(d.name), d.id)
             end
         end
         return

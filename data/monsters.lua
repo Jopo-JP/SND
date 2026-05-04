@@ -1,6 +1,13 @@
 -- ======================================================================
 -- SND Monster-Datenbank
 -- Reine Datendatei - hier Monster und ihre Drops eintragen
+--
+-- Drop-Format:
+--   id    = Item-ID (fuer Inventory.GetItemCount)
+--   name  = { en = "...", de = "...", fr = "...", ja = "..." }
+--
+-- Monster-Name bleibt ein einzelner String (muss zur Sprache des
+-- Spielclients passen, da er fuer /target benutzt wird).
 -- ======================================================================
 local monsters = {
     {
@@ -14,7 +21,15 @@ local monsters = {
             { x = -31.4, y = -54.0, z = 493.9 },
         },
         drops = {
-            { name = "Ätzendes Sekret", id = 5496 },
+            {
+                id = 5496,
+                name = {
+                    en = "Acidic Secretions",
+                    de = "Ätzendes Sekret",
+                    fr = "Mucus acide",
+                    ja = "アリオンの酸液",
+                },
+            },
         },
     },
     {
@@ -31,7 +46,15 @@ local monsters = {
             { x = 337.0, y = 171.1, z = 226.0 },
         },
         drops = {
-            { name = "Glotzaugen-Tränen", id = 12628 },
+            {
+                id = 12628,
+                name = {
+                    en = "Deepeye Tears",
+                    de = "Glotzaugen-Tränen",
+                    fr = "Larme d'oculus",
+                    ja = "ディープアイの涙",
+                },
+            },
         },
     },
     -- ===== WEITERE MONSTER HIER EINFÜGEN =====

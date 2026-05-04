@@ -60,4 +60,41 @@ function M.matchName(haystack, needle)
     ) ~= nil
 end
 
+--- Prüft ob ein multilang Name-Table einen Suchbegriff enthält.
+-- Durchsucht alle Sprachen (en, de, fr, ja).
+-- Funktioniert auch wenn name ein einfacher String ist (Rückwärtskompatibel).
+-- @param name string|table Name-String oder {en="...", de="...", ...}
+-- @param search string Suchbegriff
+-- @return boolean match, string|nil matchedLang
+function M.matchMultiName(name, search)
+    if type(name) == "string" then
+        return M.matchName(name, search), nil
+    end
+    if type(name) == "table" then
+        for lang, langName in pairs(name) do
+            if M.matchName(langName, search) then
+                return true, lang
+            end
+        end
+    end
+    return false, nil
+end
+
+--- Gibt einen Display-Namen aus einem multilang Name-Table zurück.
+-- Bevorzugt: übergebene Sprache -> en -> erster verfügbarer Name.
+-- Funktioniert auch mit einfachem String (Rückwärtskompatibel).
+-- @param name string|table Name-String oder {en="...", de="...", ...}
+-- @param lang string|nil Bevorzugte Sprache (default "de")
+-- @return string
+function M.displayName(name, lang)
+    if type(name) == "string" then return name end
+    if type(name) ~= "table" then return tostring(name) end
+    lang = lang or "de"
+    if name[lang] then return name[lang] end
+    if name.en then return name.en end
+    -- Fallback: erster verfügbarer Name
+    for _, v in pairs(name) do return v end
+    return "???"
+end
+
 return M
