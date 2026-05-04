@@ -198,4 +198,95 @@ function M.getItemAllLanguages(itemId)
     }
 end
 
+--- Sucht BNpcName-Eintraege ueber das Feld Singular.
+-- @param name string Suchbegriff
+-- @param language string|nil Sprache (default "de")
+-- @param limit number|nil Max Ergebnisse (default 10)
+-- @return table|nil Array von {id, name, score} oder nil
+function M.searchMobNames(name, language, limit)
+    language = language or "de"
+    limit = limit or 10
+
+    local query = 'Singular~"' .. name .. '"'
+    local url = string.format(
+        "%s/search?sheets=BNpcName&query=%s&fields=Singular&language=%s&limit=%d",
+        M.BASE_URL,
+        urlEncode(query),
+        urlEncode(language),
+        limit
+    )
+
+    local body = httpGet(url)
+    if not body then return nil end
+
+    local ok, data = pcall(json.decode, body)
+    if not ok or not data then
+        log.error("BNpcName JSON-Parse fehlgeschlagen: %s", tostring(data))
+        return nil
+    end
+
+    if not data.results then
+        log.warn("Keine BNpcName-Ergebnisse in API-Antwort")
+        return {}
+    end
+
+    local results = {}
+    for _, r in ipairs(data.results) do
+        results[#results + 1] = {
+            id    = r.row_id,
+            name  = r.fields and r.fields.Singular or ("BNpcName#" .. r.row_id),
+            score = r.score,
+            sheet = r.sheet,
+        }
+    end
+
+    return results
+end
+
+--- Liest einen BNpcName-Eintrag in allen 4 Sprachen.
+-- Nutzt Singular fuer /target, Plural optional zur Referenz.
+-- @param rowId number BNpcName row_id
+-- @return table|nil {id, singular={...}, plural={...}} oder nil
+function M.getMobNameAllLanguages(rowId)
+    local url = string.format(
+        "%s/sheet/BNpcName/%d?fields=Singular@lang(en),Singular@lang(de),Singular@lang(fr),Singular@lang(ja),Plural@lang(en),Plural@lang(de),Plural@lang(fr),Plural@lang(ja)",
+        M.BASE_URL,
+        rowId
+    )
+
+    local body = httpGet(url)
+    if not body then return nil end
+
+    local ok, data = pcall(json.decode, body)
+    if not ok or not data or not data.fields then
+        log.error("Multilinguales BNpcName-JSON konnte nicht gelesen werden")
+        return nil
+    end
+
+    local singular = {
+        en = data.fields["Singular@lang(en)"],
+        de = data.fields["Singular@lang(de)"],
+        fr = data.fields["Singular@lang(fr)"],
+        ja = data.fields["Singular@lang(ja)"],
+    }
+
+    local plural = {
+        en = data.fields["Plural@lang(en)"],
+        de = data.fields["Plural@lang(de)"],
+        fr = data.fields["Plural@lang(fr)"],
+        ja = data.fields["Plural@lang(ja)"],
+    }
+
+    if not (singular.en and singular.de and singular.fr and singular.ja) then
+        log.error("Multilinguale BNpcName-Antwort unvollstaendig fuer Row ID %d", rowId)
+        return nil
+    end
+
+    return {
+        id = rowId,
+        singular = singular,
+        plural = plural,
+    }
+end
+
 return M

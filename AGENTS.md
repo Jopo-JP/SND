@@ -31,7 +31,7 @@ lib/
 scripts/
   farm.lua             Hauptskript zum Farmen
   item-search.lua      Item-Suche + multilingualer Drop-Export
-  monster-builder.lua  Monster-Eintrag mit Waypoints + Item erstellen
+  monster-builder.lua  Monster-Eintrag mit Waypoints + BNpcName + Item erstellen
   positions-helper.lua Waypoints sammeln
 ```
 
@@ -92,6 +92,7 @@ Deshalb:
 - `positions-helper.lua` schreibt Waypoints in die Zwischenablage
 - `item-search.lua` schreibt fertige Drop-Bloecke in die Zwischenablage
 - `monster-builder.lua` schreibt fast fertige Monster-Bloecke in die Zwischenablage
+- `monster-builder.lua` nutzt `BNpcName.Singular`, um Monster-Namen multilingual zu exportieren
 
 ## Bekannte Probleme
 

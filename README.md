@@ -138,6 +138,7 @@ Funktionen:
 - `monsterName` konfigurierbar
 - `itemName` oder `itemId` konfigurierbar
 - sammelt Waypoints wie `positions-helper.lua`
+- sucht Monster-Namen ueber `BNpcName` und exportiert sie multilingual
 - laedt Item-Namen in `en`, `de`, `fr`, `ja`
 - kopiert den kompletten Monster-Block in die Zwischenablage
 
@@ -145,7 +146,12 @@ Beispiel Output:
 
 ```lua
     {
-        name = "Glotzauge",
+        name = {
+            en = "deepeye",
+            de = "Glotzauge",
+            fr = "oculus",
+            ja = "ディープアイ",
+        },
         waypoints = {
             { x = 48.4, y = -16.0, z = 152.8 },
             { x = 46.7, y = -16.0, z = 154.1 },
@@ -223,10 +229,11 @@ Drops sind multilingual:
 `scripts/monster-builder.lua`:
 
 1. liest `monsterName` und `itemName`
-2. sucht Item ueber `lib/xivapi.lua`
-3. liest aktuelle Position ueber `lib/entity.lua`
-4. sammelt Waypoints aus der Zwischenablage
-5. kopiert fertigen Eintrag zurueck in die Zwischenablage
+2. sucht Monster ueber `BNpcName` in `lib/xivapi.lua`
+3. sucht Item ueber `lib/xivapi.lua`
+4. liest aktuelle Position ueber `lib/entity.lua`
+5. sammelt Waypoints aus der Zwischenablage
+6. kopiert fertigen Eintrag zurueck in die Zwischenablage
 
 ### API-Pfad
 
@@ -237,6 +244,11 @@ Drops sind multilingual:
 3. encodiert stdout als Base64
 4. dekodiert Base64 in Lua
 5. parsed JSON ueber `lib/json.lua`
+
+Zusaetzlich verwendet das Repo:
+
+- `Item.Name` fuer Item-Suchen
+- `BNpcName.Singular` fuer Mob-/Monster-Suchen
 
 Der Base64-Schritt ist noetig, weil Windows Console-Codepages UTF-8/Umlaute/Japanisch sonst zerstoeren.
 

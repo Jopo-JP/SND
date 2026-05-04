@@ -16,7 +16,7 @@ description: >-
 configs:
   monsterName:
     default: "MONSTER_NAME_HIER"
-    description: Monster-Name fuer /target (muss zur Client-Sprache passen)
+    description: Monster-Name oder BNpcName-Begriff fuer XIVAPI-Suche
     type: string
     required: true
   itemName:
@@ -65,6 +65,17 @@ local function searchItemWithFallback(name)
     return nil, nil
 end
 
+local function searchMobWithFallback(name)
+    local order = { "en", "de", "fr", "ja" }
+    for _, lang in ipairs(order) do
+        local results = xivapi.searchMobNames(name, lang, 1)
+        if results and #results > 0 then
+            return results[1], lang
+        end
+    end
+    return nil, nil
+end
+
 -- ======================================================================
 -- Waypoint-Parsing (gleiche Logik wie positions-helper)
 -- ======================================================================
@@ -86,7 +97,16 @@ end
 local function formatEntry(monsterName, itemData, waypoints)
     local lines = {}
     lines[#lines + 1] = "    {"
-    lines[#lines + 1] = string.format('        name = "%s",', escapeLuaString(monsterName))
+    if type(monsterName) == "table" then
+        lines[#lines + 1] = "        name = {"
+        lines[#lines + 1] = string.format('            en = "%s",', escapeLuaString(monsterName.en))
+        lines[#lines + 1] = string.format('            de = "%s",', escapeLuaString(monsterName.de))
+        lines[#lines + 1] = string.format('            fr = "%s",', escapeLuaString(monsterName.fr))
+        lines[#lines + 1] = string.format('            ja = "%s",', escapeLuaString(monsterName.ja))
+        lines[#lines + 1] = "        },"
+    else
+        lines[#lines + 1] = string.format('        name = "%s",', escapeLuaString(monsterName))
+    end
     lines[#lines + 1] = "        waypoints = {"
 
     for _, wp in ipairs(waypoints) do
@@ -119,6 +139,26 @@ end
 -- ======================================================================
 -- Main
 -- ======================================================================
+
+-- 0. Monster-Namen aufloesen
+local monsterNameData = MONSTER_NAME
+if MONSTER_NAME and MONSTER_NAME ~= "" then
+    local mobResult, mobLang = searchMobWithFallback(MONSTER_NAME)
+    if mobResult then
+        log.info("Monster gefunden ueber Sprache '%s': ID %d - Lade alle Sprachen...", mobLang, mobResult.id)
+        local mobNames = xivapi.getMobNameAllLanguages(mobResult.id)
+        if mobNames and mobNames.singular then
+            monsterNameData = mobNames.singular
+            log.info("Monster: de=%s | en=%s | fr=%s | ja=%s",
+                mobNames.singular.de,
+                mobNames.singular.en,
+                mobNames.singular.fr,
+                mobNames.singular.ja)
+        end
+    else
+        log.warn("Monster '%s' nicht ueber BNpcName gefunden - nutze den eingegebenen String direkt.", MONSTER_NAME)
+    end
+end
 
 -- 1. Item-Daten laden (falls angegeben)
 local itemData = nil
@@ -181,7 +221,7 @@ else
 end
 
 -- 5. Entry formatieren und in Zwischenablage
-local entry = formatEntry(MONSTER_NAME, itemData, waypoints)
+local entry = formatEntry(monsterNameData, itemData, waypoints)
 System.SetClipboardText(entry)
 
 log.info("=== Monster-Entry in Zwischenablage (%d Waypoints) ===", #waypoints)
