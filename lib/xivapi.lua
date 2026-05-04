@@ -1,9 +1,9 @@
 -- ======================================================================
 -- SND XIVAPI Client Module
--- Non-blocking HTTP-Client fuer https://v2.xivapi.com/api
+-- HTTP-Client fuer https://v2.xivapi.com/api
 --
--- Startet PowerShell als Hintergrund-Prozess (Start-Process -NoNewWindow)
--- und pollt die Antwort-Datei, damit der Game Main Thread frei bleibt.
+-- Nutzt PowerShell Invoke-RestMethod via io.popen.
+-- Blockiert kurz (~200ms), aber zuverlaessig auf allen Windows-Versionen.
 -- ======================================================================
 local json = require("lib/json")
 local log  = require("lib/logger")
@@ -11,7 +11,6 @@ local log  = require("lib/logger")
 local M = {}
 
 M.BASE_URL = "https://v2.xivapi.com/api"
-M.TIMEOUT  = 10  -- Sekunden max. Wartezeit auf API-Antwort
 
 --- URL-Encoding fuer Query-Parameter (Sonderzeichen, Umlaute, Leerzeichen).
 -- @param str string Zu kodierender String
@@ -22,73 +21,41 @@ local function urlEncode(str)
     end)
 end
 
---- Generiert einen eindeutigen Temp-Dateinamen.
--- @return string Pfad zur Temp-Datei
-local function tempFile()
-    local tmp = os.getenv("TEMP") or os.getenv("TMP") or "/tmp"
-    return tmp .. "\\snd_xivapi_" .. tostring(os.clock()):gsub("%.", "") .. ".json"
-end
-
---- Startet einen HTTP GET als Hintergrund-Prozess via PowerShell.
--- Nutzt yield() zwischen den Poll-Versuchen, damit das Spiel nicht laggt.
+--- HTTP GET via PowerShell Invoke-RestMethod.
+-- Liest die Ausgabe direkt ueber stdout (io.popen), kein Temp-File noetig.
 -- @param url string Vollstaendige URL
--- @return string|nil Response-Body oder nil bei Fehler
-local function httpGetAsync(url)
-    local outFile = tempFile()
-    log.debug("HTTP GET (async): %s", url)
+-- @return string|nil JSON-Body oder nil bei Fehler
+local function httpGet(url)
+    log.debug("HTTP GET: %s", url)
 
-    -- PowerShell-Befehl: Invoke-RestMethod schreibt direkt in Datei
-    -- [System.IO.File]::WriteAllText vermeidet BOM auf allen PS-Versionen
-    local psScript = string.format(
-        "try { $r = Invoke-RestMethod -Uri '%s' | ConvertTo-Json -Depth 10; [System.IO.File]::WriteAllText('%s', $r) } catch { [System.IO.File]::WriteAllText('%s', 'ERROR: ' + $_.Exception.Message) }",
-        url, outFile, outFile
-    )
-
-    -- Starte PowerShell non-blocking: os.execute kehrt sofort zurueck
+    -- PowerShell-Befehl:
+    -- -NoProfile: Schnellerer Start
+    -- -Command:   Invoke-RestMethod gibt direkt JSON zurueck
+    -- [Console]::OutputEncoding sicherstellen dass UTF-8 ohne BOM auf stdout kommt
     local cmd = string.format(
-        'powershell.exe -NoProfile -WindowStyle Hidden -Command "Start-Process powershell -ArgumentList \'-NoProfile\',\'-Command\',\'%s\' -WindowStyle Hidden"',
-        psScript:gsub("'", "''")  -- single quotes escapen fuer verschachtelte PS-Aufrufe
+        'powershell.exe -NoProfile -Command "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); Invoke-RestMethod -Uri \'%s\' | ConvertTo-Json -Depth 10 -Compress"',
+        url
     )
 
-    os.execute(cmd)
-
-    -- Warte non-blocking bis Datei existiert und Inhalt hat
-    for i = 1, M.TIMEOUT * 5 do  -- alle 0.2s pruefen
-        yield("/wait 0.2")
-
-        local f = io.open(outFile, "r")
-        if f then
-            local body = f:read("*a")
-            f:close()
-
-            if body and #body > 0 then
-                -- Fehler-Check
-                if body:match("^ERROR:") then
-                    log.error("XIVAPI Fehler: %s", body)
-                    os.remove(outFile)
-                    return nil
-                end
-
-                -- Pruefen ob JSON komplett ist (endet mit } oder ])
-                local trimmed = body:match("^%s*(.-)%s*$")
-                if trimmed and (#trimmed > 0) and (trimmed:sub(-1) == "}" or trimmed:sub(-1) == "]") then
-                    os.remove(outFile)
-                    log.debug("API-Antwort erhalten (%d bytes)", #body)
-                    return body
-                end
-            end
-        end
+    local handle = io.popen(cmd, "r")
+    if not handle then
+        log.error("PowerShell konnte nicht gestartet werden")
+        return nil
     end
 
-    -- Timeout - aufraeumen
-    log.error("XIVAPI Timeout nach %ds!", M.TIMEOUT)
-    pcall(os.remove, outFile)
-    return nil
+    local body = handle:read("*a")
+    handle:close()
+
+    if not body or body == "" then
+        log.error("Leere Antwort von XIVAPI")
+        return nil
+    end
+
+    return body
 end
 
 --- Sucht Items per Name ueber die XIVAPI Search API.
 -- Nutzt partial string match (Name~"suchbegriff").
--- Non-blocking: gibt dem Spiel zwischen Polls Zeit zum Rendern.
 -- @param name string Suchbegriff (Item-Name oder Teil davon)
 -- @param language string|nil Sprache (default "de")
 -- @param limit number|nil Max Ergebnisse (default 10)
@@ -106,7 +73,7 @@ function M.searchItems(name, language, limit)
         limit
     )
 
-    local body = httpGetAsync(url)
+    local body = httpGet(url)
     if not body then return nil end
 
     local ok, data = pcall(json.decode, body)
@@ -134,7 +101,6 @@ function M.searchItems(name, language, limit)
 end
 
 --- Liest ein einzelnes Item per ID von der XIVAPI.
--- Non-blocking.
 -- @param itemId number Item-ID
 -- @param language string|nil Sprache (default "de")
 -- @return table|nil {id, name} oder nil
@@ -148,7 +114,7 @@ function M.getItem(itemId, language)
         urlEncode(language)
     )
 
-    local body = httpGetAsync(url)
+    local body = httpGet(url)
     if not body then return nil end
 
     local ok, data = pcall(json.decode, body)
