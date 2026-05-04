@@ -124,6 +124,8 @@ Deshalb:
 ## Offene TODOs
 
 - Client-Sprache direkt aus SND/Dalamud lesen, falls spaeter verfuegbar
+- Zone/Territory pro Monster erfassen (ID + Name) und vor dem Farmen pruefen;
+  bei falscher Zone soll das Skript mit klarer Meldung abbrechen
 - Item-Suche `language = all` mit Fallback-Reihenfolge statt nur `de`
 - Mehrere Drops pro Monster ueber Builder unterstuetzen
 - XIVAPI optional cachen

@@ -220,13 +220,36 @@ local ok, err = xpcall(function()
     end
 
     while not isDone() do
-        combat.scanAndKill(mobName, isDone, onKill)
-
-        if isDone() then break end
-
         local wp = waypoints[wpIdx]
-        log.debug("Laufe zu Waypoint %d: %.1f/%.1f/%.1f", wpIdx, wp.x, wp.y, wp.z)
-        nav.moveTo(wp.x, wp.y, wp.z, mobName)
+        local clearedArea = false
+
+        while not isDone() and not clearedArea do
+            combat.scanAndKill(mobName, isDone, onKill)
+
+            if isDone() then break end
+
+            local areaKillsBeforeMove = kills
+            log.debug("Laufe zu Waypoint %d: %.1f/%.1f/%.1f", wpIdx, wp.x, wp.y, wp.z)
+            local moveStatus = nav.moveTo(wp.x, wp.y, wp.z, mobName)
+
+            if moveStatus == "arrived" then
+                log.debug("Waypoint %d erreicht - Bereich leer.", wpIdx)
+                clearedArea = true
+            elseif moveStatus == "mob" or moveStatus == "combat" then
+                log.debug("Wegpunkt %d wegen Mob unterbrochen - Bereich wird weiter gecleart.", wpIdx)
+            else
+                log.warn("Waypoint %d nicht sauber erreicht (%s) - gehe weiter.", wpIdx, tostring(moveStatus))
+                clearedArea = true
+            end
+
+            if areaKillsBeforeMove == kills and moveStatus ~= "arrived" then
+                -- Kein Fortschritt auf dem Weg und auch kein neuer Kill:
+                -- nicht an diesem Punkt festhaengen.
+                log.debug("Kein neuer Fortschritt an Waypoint %d - gehe weiter.", wpIdx)
+                clearedArea = true
+            end
+        end
+
         wpIdx = (wpIdx % #waypoints) + 1
     end
 

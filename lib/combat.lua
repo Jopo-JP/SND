@@ -39,12 +39,22 @@ end
 --- Versucht das aktuelle Target zu töten.
 -- Läuft zum Mob, benutzt Pull-Skill, wartet auf Kampfende.
 -- @param mobName string Mob-Name für Re-Targeting
--- @return boolean Kill erfolgreich
+-- @return boolean, string Kill erfolgreich und Status
 function M.killTarget(mobName)
-    if not entity.hasTarget() then return false end
+    if not entity.hasTarget() then return false, "no_target" end
 
-    if not nav.walkToTarget(mobName, M.KILL_RANGE) then
+    local reached, walkStatus = nav.walkToTarget(mobName, M.KILL_RANGE)
+    if not reached then
+        if walkStatus == "dead" then
+            log.info("Target starb vor Kampfbeginn.")
+            return false, "dead"
+        end
+        if walkStatus == "lost" then
+            log.warn("Target verloren.")
+            return false, "lost"
+        end
         log.warn("Konnte nicht zum Target laufen!")
+        return false, walkStatus or "failed"
     end
 
     for attempt = 1, M.MAX_PULL_ATTEMPTS do
@@ -55,7 +65,7 @@ function M.killTarget(mobName)
         if entity.isInCombat() then
             log.info("Kampf gestartet! Warte auf Kill...")
             M.waitCombatEnd()
-            return true
+            return true, "killed"
         end
 
         log.warn("Kein Kampf nach Versuch %d", attempt)
@@ -63,19 +73,22 @@ function M.killTarget(mobName)
         utils.tryTargetByName(mobName)
         if not entity.hasTarget() then
             log.warn("Target weg - wahrscheinlich tot.")
-            return false
+            return false, "lost"
         end
 
         if entity.targetIsDead() then
             log.info("Target bereits tot!")
-            return true
+            return false, "dead"
         end
 
-        nav.walkToTarget(mobName, M.KILL_RANGE)
+        local moved, status = nav.walkToTarget(mobName, M.KILL_RANGE)
+        if not moved and status == "dead" then
+            return false, "dead"
+        end
     end
 
     log.warn("Konnte nicht killen nach %d Versuchen.", M.MAX_PULL_ATTEMPTS)
-    return false
+    return false, "failed"
 end
 
 --- Scannt die Umgebung und tötet alle Mobs im Scan-Range.
@@ -105,9 +118,13 @@ function M.scanAndKill(mobName, isDoneFn, onKillFn)
             end
         end
 
-        if M.killTarget(mobName) then
+        local killed, status = M.killTarget(mobName)
+        if killed then
             areaKills = areaKills + 1
             if onKillFn then onKillFn(areaKills) end
+        elseif status == "dead" or status == "lost" or status == "no_target" then
+            log.debug("Target nicht mehr gueltig (%s) - suche naechsten Mob.", status)
+            yield("/wait 0.2")
         else
             log.warn("Kill fehlgeschlagen - weitergehen.")
             break

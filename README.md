@@ -309,6 +309,9 @@ Verbesserungspaeter:
 ## TODO
 
 - Client-Sprache direkt aus SND/Dalamud lesen, falls spaeter verfuegbar
+- Zone/Territory pro Monster erfassen (ID + Name) und vor dem Farmen pruefen;
+  wenn der Spieler in der falschen Zone ist, soll das Skript mit klarer Meldung
+  abbrechen statt still weiterzulaufen
 - Fallback-Suchstrategie fuer `item-search.lua` verbessern
 - eventuell C#-seitiges HTTP-Modul fuer SND bauen, um PowerShell komplett zu vermeiden
 - optional Caching fuer XIVAPI-Antworten einfuehren

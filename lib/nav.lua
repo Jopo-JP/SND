@@ -56,12 +56,12 @@ end
 -- @param z number Ziel Z
 -- @param mobName string|nil Mob-Name zum automatischen Targeting unterwegs
 -- @param retries number|nil Interner Retry-Counter
--- @return boolean Erfolgreich angekommen oder Mob erkannt
+-- @return string "arrived", "mob", "combat" oder "failed"
 function M.moveTo(x, y, z, mobName, retries)
     retries = retries or 0
     log.debug("MoveTo %.1f/%.1f/%.1f (Versuch %d)", x, y, z, retries + 1)
 
-    if not M.ensureMesh() then return false end
+    if not M.ensureMesh() then return "failed" end
 
     yield("/vnav moveto " .. tostring(x) .. " " .. tostring(y) .. " " .. tostring(z))
     yield("/wait 0.8")
@@ -73,7 +73,7 @@ function M.moveTo(x, y, z, mobName, retries)
             return M.moveTo(x, y, z, mobName, retries + 1)
         else
             log.error("Max Retries erreicht - weitergehen.")
-            return false
+            return "failed"
         end
     end
 
@@ -84,7 +84,7 @@ function M.moveTo(x, y, z, mobName, retries)
         if entity.isInCombat() then
             log.info("Kampf beim Laufen! Stoppe.")
             M.stop()
-            return true
+            return "combat"
         end
 
         if mobName then
@@ -97,7 +97,7 @@ function M.moveTo(x, y, z, mobName, retries)
                     if d <= M.DETECTION_RANGE then
                         log.info("Mob erkannt (%.0fy)! Stoppe.", d)
                         M.stop()
-                        return true
+                        return "mob"
                     end
                 end
             end
@@ -107,7 +107,7 @@ function M.moveTo(x, y, z, mobName, retries)
         if ticks > maxTicks then
             log.error("MoveTo Timeout nach %ds!", M.MOVE_TIMEOUT_SEC)
             M.stop()
-            return false
+            return "failed"
         end
         yield("/wait 0.2")
     end
@@ -118,35 +118,47 @@ function M.moveTo(x, y, z, mobName, retries)
         local d = utils.dist(pos, x, y, z)
         if d > M.ARRIVAL_THRESHOLD and retries < M.MAX_RETRIES then
             return M.moveTo(x, y, z, mobName, retries + 1)
+        elseif d > M.ARRIVAL_THRESHOLD then
+            return "failed"
         end
     end
 
-    return true
+    return "arrived"
 end
 
 --- Läuft zum aktuellen Target bis in Kill-Range.
 -- @param mobName string Mob-Name für Re-Targeting
 -- @param killRange number Distanz ab der gestoppt wird
 -- @param maxSteps number|nil Max Iterationen (default 50)
--- @return boolean In Kill-Range angekommen
+-- @return boolean, string In Kill-Range/Kampf erreicht und Status
 function M.walkToTarget(mobName, killRange, maxSteps)
     maxSteps = maxSteps or 50
 
     for step = 1, maxSteps do
+        utils.tryTargetByName(mobName)
+        if not entity.hasTarget() then
+            M.stop()
+            log.warn("Target verloren!")
+            return false, "lost"
+        end
+
+        if entity.targetIsDead() then
+            M.stop()
+            log.debug("Target ist bereits tot.")
+            return false, "dead"
+        end
+
         local tPos = entity.getTargetPos()
         local myPos = entity.getPlayerPos()
-        if not tPos or not myPos then return false end
+        if not tPos or not myPos then
+            M.stop()
+            return false, "lost"
+        end
 
         local d = utils.distBetween(myPos, tPos)
         if d <= killRange then
             log.debug("In Kill-Range (%.1fy)!", d)
-            return true
-        end
-
-        utils.tryTargetByName(mobName)
-        if not entity.hasTarget() then
-            log.warn("Target verloren!")
-            return false
+            return true, "in_range"
         end
 
         log.debug("Laufe zum Target... %.1fy", d)
@@ -156,14 +168,20 @@ function M.walkToTarget(mobName, killRange, maxSteps)
         if entity.isInCombat() then
             log.info("Kampf gestartet!")
             M.stop()
-            return true
+            return true, "combat"
+        end
+
+        if entity.targetIsDead() then
+            M.stop()
+            log.debug("Target starb waehrend des Anlaufs.")
+            return false, "dead"
         end
 
         if not M.isMoving() then
             local newPos = entity.getPlayerPos()
             local newT = entity.getTargetPos()
             if newPos and newT and utils.distBetween(newPos, newT) <= killRange then
-                return true
+                return true, "in_range"
             end
         end
 
@@ -171,7 +189,8 @@ function M.walkToTarget(mobName, killRange, maxSteps)
     end
 
     log.warn("WalkToTarget: Max Steps erreicht!")
-    return false
+    M.stop()
+    return false, "failed"
 end
 
 return M
