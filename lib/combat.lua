@@ -60,7 +60,7 @@ function M.killTarget(mobName)
 
         log.warn("Kein Kampf nach Versuch %d", attempt)
 
-        yield("/target " .. mobName)
+        utils.tryTargetByName(mobName)
         if not entity.hasTarget() then
             log.warn("Target weg - wahrscheinlich tot.")
             return false
@@ -87,7 +87,7 @@ function M.scanAndKill(mobName, isDoneFn, onKillFn)
     local areaKills = 0
 
     while not isDoneFn() do
-        yield("/target " .. mobName)
+        utils.tryTargetByName(mobName)
         yield("/wait 0.3")
 
         if not entity.hasTarget() then

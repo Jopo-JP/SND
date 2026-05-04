@@ -2,12 +2,14 @@
 -- SND Monster-Datenbank
 -- Reine Datendatei - hier Monster und ihre Drops eintragen
 --
+-- Monster-Format:
+--   name  = "..." oder { en = "...", de = "...", fr = "...", ja = "..." }
+--           Fuer /target probiert das Skript die verfuegbaren Sprachen
+--           nacheinander, falls die Client-Sprache nicht bekannt ist.
+--
 -- Drop-Format:
 --   id    = Item-ID (fuer Inventory.GetItemCount)
 --   name  = { en = "...", de = "...", fr = "...", ja = "..." }
---
--- Monster-Name bleibt ein einzelner String (muss zur Sprache des
--- Spielclients passen, da er fuer /target benutzt wird).
 -- ======================================================================
 local monsters = {
     {
@@ -33,7 +35,12 @@ local monsters = {
         },
     },
     {
-        name = "Glotzauge",
+        name = {
+            en = "deepeye",
+            de = "Glotzauge",
+            fr = "oculus",
+            ja = "ディープアイ",
+        },
         waypoints = {
             { x = 414.3, y = 174.6, z = 454.5 },
             { x = 449.5, y = 170.6, z = 431.7 },

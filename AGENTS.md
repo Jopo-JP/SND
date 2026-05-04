@@ -48,12 +48,14 @@ scripts/
 - `data/monsters.lua` enthaelt nur Daten.
 - Logik lebt in `lib/` und `scripts/`.
 
-### 2. Monster-Namen bleiben aktuell Single-String
+### 2. Monster-Namen sind optional multilingual
 
 Grund:
 
 - `/target <name>` muss exakt zur Sprache des Clients passen.
-- Deshalb ist `monster.name` aktuell kein multilingualer Table.
+- Falls `monster.name` ein multilingualer Table ist, probiert das Skript die
+  verfuegbaren Sprachen nacheinander.
+- Falls `monster.name` ein einzelner String ist, bleibt das Verhalten wie bisher.
 
 ### 3. Drop-Namen sind multilingual
 
@@ -104,10 +106,10 @@ Deshalb:
 - SND stellt aktuell kein natives HTTP-Modul fuer Lua bereit.
 - PowerShell ist die derzeit pragmatischste Loesung.
 
-### Monster-Namen noch nicht multilingual
+### Client-Sprache wird nicht direkt erkannt
 
-- Noch offen.
-- Wuerde Anpassungen fuer `/target` und Client-Sprache benoetigen.
+- Mehrsprachige Monster-Namen werden aktuell ueber `/target`-Fallbacks geloest.
+- Das ist funktional, aber nicht so elegant wie echte Client-Spracherkennung.
 
 ## Erwartungen an weitere Aenderungen
 
@@ -119,7 +121,7 @@ Deshalb:
 
 ## Offene TODOs
 
-- Monster-Namen optional multilingual machen
+- Client-Sprache direkt aus SND/Dalamud lesen, falls spaeter verfuegbar
 - Item-Suche `language = all` mit Fallback-Reihenfolge statt nur `de`
 - Mehrere Drops pro Monster ueber Builder unterstuetzen
 - XIVAPI optional cachen

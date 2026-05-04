@@ -168,16 +168,29 @@ Beispiel Output:
 
 ### `data/monsters.lua`
 
-Monster bleiben aktuell sprachabhaengig als einzelner String:
+Monster koennen als einzelner String oder multilingualer Table vorliegen:
 
 ```lua
 name = "Glotzauge"
 ```
 
+oder:
+
+```lua
+name = {
+    en = "deepeye",
+    de = "Glotzauge",
+    fr = "oculus",
+    ja = "ディープアイ",
+}
+```
+
 Grund:
 
-- dieser Name wird direkt fuer `/target <name>` verwendet
-- `/target` muss zur Sprache des Game-Clients passen
+- SND/Lua bekommt die Client-Sprache aktuell nicht direkt sauber geliefert
+- deshalb probiert das Skript bei multilingualen Monster-Namen die verfuegbaren
+  Namen nacheinander fuer `/target`
+- ein einfacher String funktioniert weiterhin genauso wie bisher
 
 Drops sind multilingual:
 
@@ -249,14 +262,19 @@ Status: bekannt.
 
 Es gibt in SND aktuell kein natives HTTP-Modul fuer Lua. Deshalb wird PowerShell verwendet.
 
-### 3. Monster-Namen sind noch nicht multilingual
+### 3. Mehrsprachige Monster-Namen nutzen Fallback statt echter Client-Spracherkennung
 
-Status: offen.
+Status: teilweise umgesetzt.
 
-Warum noch nicht umgesetzt:
+Aktueller Stand:
 
-- `/target` benoetigt den Namen in Client-Sprache
-- ein multilinguales Monster-Modell muesste zusaetzlich entscheiden, welchen Namen fuer `/target` genutzt wird
+- `monster.name` kann jetzt multilingual sein
+- fuer `/target` werden die verfuegbaren Sprachvarianten nacheinander probiert
+
+Einschraenkung:
+
+- es gibt noch keine direkte Client-Spracherkennung in diesem Repo
+- dadurch entstehen pro Target-Versuch ggf. mehrere `/target`-Aufrufe
 
 ### 4. Item-Suche mit `language = all` sucht initial in `de`
 
@@ -271,7 +289,7 @@ Verbesserungspaeter:
 
 ## TODO
 
-- Monster-Namen optional multilingual modellieren
+- Client-Sprache direkt aus SND/Dalamud lesen, falls spaeter verfuegbar
 - Fallback-Suchstrategie fuer `item-search.lua` verbessern
 - eventuell C#-seitiges HTTP-Modul fuer SND bauen, um PowerShell komplett zu vermeiden
 - optional Caching fuer XIVAPI-Antworten einfuehren

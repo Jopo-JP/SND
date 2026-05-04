@@ -97,4 +97,56 @@ function M.displayName(name, lang)
     return "???"
 end
 
+--- Gibt eine geordnete Liste von Moeglichen Namen fuer /target zurueck.
+-- Unterstuetzt String oder multilingualen Table.
+-- Reihenfolge ist auf praktikable Target-Fallbacks optimiert.
+-- @param name string|table Name-String oder {en="...", de="...", ...}
+-- @return table Liste von Namen ohne Duplikate
+function M.targetNameCandidates(name)
+    if type(name) == "string" then return { name } end
+    if type(name) ~= "table" then return { tostring(name) } end
+
+    local order = { "en", "de", "fr", "ja" }
+    local out = {}
+    local seen = {}
+
+    for _, lang in ipairs(order) do
+        local value = name[lang]
+        if value and value ~= "" and not seen[value] then
+            out[#out + 1] = value
+            seen[value] = true
+        end
+    end
+
+    for _, value in pairs(name) do
+        if value and value ~= "" and not seen[value] then
+            out[#out + 1] = value
+            seen[value] = true
+        end
+    end
+
+    if #out == 0 then
+        out[1] = ""
+    end
+
+    return out
+end
+
+--- Versucht nacheinander mehrere Moegliche /target Namen.
+-- Bricht sofort ab, sobald ein Target gefunden wurde.
+-- @param name string|table Name-String oder {en="...", de="...", ...}
+-- @return boolean true wenn ein Target gefunden wurde
+function M.tryTargetByName(name)
+    for _, candidate in ipairs(M.targetNameCandidates(name)) do
+        if candidate ~= "" then
+            yield("/target " .. candidate)
+            local ok, hasTarget = pcall(function() return Entity.Target ~= nil end)
+            if ok and hasTarget then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 return M

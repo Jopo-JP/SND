@@ -88,7 +88,7 @@ function M.moveTo(x, y, z, mobName, retries)
         end
 
         if mobName then
-            yield("/target " .. mobName)
+            utils.tryTargetByName(mobName)
             if entity.hasTarget() then
                 local tPos = entity.getTargetPos()
                 local myPos = entity.getPlayerPos()
@@ -143,7 +143,7 @@ function M.walkToTarget(mobName, killRange, maxSteps)
             return true
         end
 
-        yield("/target " .. mobName)
+        utils.tryTargetByName(mobName)
         if not entity.hasTarget() then
             log.warn("Target verloren!")
             return false

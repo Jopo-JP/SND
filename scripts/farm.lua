@@ -144,10 +144,11 @@ local ok, err = xpcall(function()
     end
 
     local mobName   = monster.name
+    local mobLabel  = utils.displayName(monster.name)
     local waypoints = monster.waypoints
 
     log.info("Farm: %d x '%s' (ID:%d)", FARM_QTY, farmItemName, farmItemId)
-    log.info("Monster: %s | Waypoints: %d", mobName, #waypoints)
+    log.info("Monster: %s | Waypoints: %d", mobLabel, #waypoints)
     log.info("Pull: %s | Kill-Range: %dy | Scan: %dy",
         combat.PULL_SKILL, combat.KILL_RANGE, combat.SCAN_RANGE)
 
@@ -239,7 +240,7 @@ local ok, err = xpcall(function()
     local curItems = inventory.getCount(farmItemId)
     local collected = curItems - startItemCount
     log.info("FERTIG! %d x '%s' gesammelt (Total: %d)", collected, farmItemName, curItems)
-    log.info("Kills gesamt: %d | Monster: %s", kills, mobName)
+    log.info("Kills gesamt: %d | Monster: %s", kills, mobLabel)
 
 end, function(e)
     return debug.traceback(tostring(e), 2)
