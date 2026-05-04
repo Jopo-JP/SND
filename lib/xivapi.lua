@@ -2,8 +2,8 @@
 -- SND XIVAPI Client Module
 -- Non-blocking HTTP-Client fuer https://v2.xivapi.com/api
 --
--- Startet curl als Hintergrund-Prozess und pollt die Antwort-Datei,
--- damit der Game Main Thread nicht blockiert wird.
+-- Startet PowerShell als Hintergrund-Prozess (Start-Process -NoNewWindow)
+-- und pollt die Antwort-Datei, damit der Game Main Thread frei bleibt.
 -- ======================================================================
 local json = require("lib/json")
 local log  = require("lib/logger")
@@ -26,10 +26,10 @@ end
 -- @return string Pfad zur Temp-Datei
 local function tempFile()
     local tmp = os.getenv("TEMP") or os.getenv("TMP") or "/tmp"
-    return tmp .. "/snd_xivapi_" .. tostring(os.clock()):gsub("%.", "") .. ".json"
+    return tmp .. "\\snd_xivapi_" .. tostring(os.clock()):gsub("%.", "") .. ".json"
 end
 
---- Startet curl im Hintergrund und wartet non-blocking auf die Antwort.
+--- Startet einen HTTP GET als Hintergrund-Prozess via PowerShell.
 -- Nutzt yield() zwischen den Poll-Versuchen, damit das Spiel nicht laggt.
 -- @param url string Vollstaendige URL
 -- @return string|nil Response-Body oder nil bei Fehler
@@ -37,16 +37,18 @@ local function httpGetAsync(url)
     local outFile = tempFile()
     log.debug("HTTP GET (async): %s", url)
 
-    -- curl im Hintergrund starten, Output in Datei
-    -- Windows: 'start /b' startet ohne neues Fenster
-    -- Linux/Mac: '&' am Ende
-    local isWindows = package.config:sub(1, 1) == "\\"
-    local cmd
-    if isWindows then
-        cmd = string.format('start /b cmd /c "curl -s -f -o "%s" "%s""', outFile, url)
-    else
-        cmd = string.format('curl -s -f -o "%s" "%s" &', outFile, url)
-    end
+    -- PowerShell-Befehl: Invoke-RestMethod schreibt direkt in Datei
+    -- Start-Process -WindowStyle Hidden startet non-blocking
+    local psScript = string.format(
+        "try { Invoke-RestMethod -Uri '%s' | ConvertTo-Json -Depth 10 | Set-Content -Path '%s' -Encoding UTF8 } catch { Set-Content -Path '%s' -Value ('ERROR: ' + $_.Exception.Message) -Encoding UTF8 }",
+        url, outFile, outFile
+    )
+
+    -- Starte PowerShell non-blocking: os.execute kehrt sofort zurueck
+    local cmd = string.format(
+        'powershell.exe -NoProfile -WindowStyle Hidden -Command "Start-Process powershell -ArgumentList \'-NoProfile\',\'-Command\',\'%s\' -WindowStyle Hidden"',
+        psScript:gsub("'", "''")  -- single quotes escapen fuer verschachtelte PS-Aufrufe
+    )
 
     os.execute(cmd)
 
@@ -60,10 +62,16 @@ local function httpGetAsync(url)
             f:close()
 
             if body and #body > 0 then
+                -- Fehler-Check
+                if body:match("^ERROR:") then
+                    log.error("XIVAPI Fehler: %s", body)
+                    os.remove(outFile)
+                    return nil
+                end
+
                 -- Pruefen ob JSON komplett ist (endet mit } oder ])
                 local trimmed = body:match("^%s*(.-)%s*$")
-                if trimmed:sub(-1) == "}" or trimmed:sub(-1) == "]" then
-                    -- Temp-Datei aufraeumen
+                if trimmed and (#trimmed > 0) and (trimmed:sub(-1) == "}" or trimmed:sub(-1) == "]") then
                     os.remove(outFile)
                     log.debug("API-Antwort erhalten (%d bytes)", #body)
                     return body
@@ -74,7 +82,7 @@ local function httpGetAsync(url)
 
     -- Timeout - aufraeumen
     log.error("XIVAPI Timeout nach %ds!", M.TIMEOUT)
-    os.remove(outFile)
+    pcall(os.remove, outFile)
     return nil
 end
 
