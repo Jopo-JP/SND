@@ -12,6 +12,8 @@ local M = {}
 
 M.BASE_URL = "https://v2.xivapi.com/api"
 
+local BASE64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
 --- URL-Encoding fuer Query-Parameter (Sonderzeichen, Umlaute, Leerzeichen).
 -- @param str string Zu kodierender String
 -- @return string URL-kodierter String
@@ -22,18 +24,39 @@ local function urlEncode(str)
 end
 
 --- HTTP GET via PowerShell Invoke-RestMethod.
--- Liest die Ausgabe direkt ueber stdout (io.popen), kein Temp-File noetig.
+-- Die JSON-Antwort wird in UTF-8 serialisiert, danach base64-encodiert und
+-- erst in Lua decodiert. So umgehen wir komplett Windows-Codepage-Probleme.
 -- @param url string Vollstaendige URL
 -- @return string|nil JSON-Body oder nil bei Fehler
+local function base64Decode(data)
+    local cleaned = data:gsub("%s+", "")
+    cleaned = cleaned:gsub("[^" .. BASE64_CHARS .. "=]", "")
+
+    return (cleaned:gsub('.', function(x)
+        if x == '=' then return '' end
+        local r, f = '', (BASE64_CHARS:find(x, 1, true) or 1) - 1
+        for i = 6, 1, -1 do
+            r = r .. (f % 2 ^ i - f % 2 ^ (i - 1) > 0 and '1' or '0')
+        end
+        return r
+    end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x)
+        if #x ~= 8 then return '' end
+        local c = 0
+        for i = 1, 8 do
+            c = c + (x:sub(i, i) == '1' and 2 ^ (8 - i) or 0)
+        end
+        return string.char(c)
+    end))
+end
+
 local function httpGet(url)
     log.debug("HTTP GET: %s", url)
 
-    -- chcp 65001:       Setzt die Konsolen-Codepage auf UTF-8
-    -- [Console]::Out:   Explizit UTF-8 ohne BOM auf stdout
-    -- Invoke-RestMethod: Gibt JSON zurueck
-    -- -Compress:        Einzeilige Ausgabe
+    -- PowerShell serialisiert die API-Antwort als kompaktes JSON und gibt
+    -- anschliessend nur base64 auf stdout aus. Damit werden Umlaute und
+    -- japanische Zeichen nicht mehr von der Windows-Console-Codepage zerstoert.
     local cmd = string.format(
-        'chcp 65001 >nul & powershell.exe -NoProfile -Command "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); Invoke-RestMethod -Uri \'%s\' | ConvertTo-Json -Depth 10 -Compress"',
+        'powershell.exe -NoProfile -Command "$r = Invoke-RestMethod -Uri \'%s\'; $json = $r | ConvertTo-Json -Depth 10 -Compress; [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($json))"',
         url
     )
 
@@ -51,7 +74,13 @@ local function httpGet(url)
         return nil
     end
 
-    return body
+    local ok, decoded = pcall(base64Decode, body)
+    if not ok or not decoded or decoded == "" then
+        log.error("Base64-Decode der XIVAPI-Antwort fehlgeschlagen")
+        return nil
+    end
+
+    return decoded
 end
 
 --- Sucht Items per Name ueber die XIVAPI Search API.

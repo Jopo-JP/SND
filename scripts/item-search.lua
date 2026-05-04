@@ -36,15 +36,40 @@ local xivapi = require("lib/xivapi")
 
 log.level = "INFO"
 
+local function escapeLuaString(value)
+    return tostring(value)
+        :gsub("\\", "\\\\")
+        :gsub("\n", "\\n")
+        :gsub("\r", "\\r")
+        :gsub('"', '\\"')
+end
+
 local ITEM_NAME   = Config.Get("itemName")
 local LANGUAGE    = Config.Get("language")
 local MAX_RESULTS = Config.Get("maxResults")
 
--- 1. Suche nach Items (immer in "de" suchen, da der User wahrscheinlich DE-Namen eingibt)
-local searchLang = (LANGUAGE == "all") and "de" or LANGUAGE
-log.info("Suche '%s' via XIVAPI (Sprache: %s)...", ITEM_NAME, searchLang)
+local function searchWithFallback(name, maxResults)
+    local order = { "de", "en", "fr", "ja" }
+    for _, lang in ipairs(order) do
+        log.info("Suche '%s' via XIVAPI (Sprache: %s)...", name, lang)
+        local found = xivapi.searchItems(name, lang, maxResults)
+        if found and #found > 0 then
+            return found, lang
+        end
+    end
+    return {}, nil
+end
 
-local results = xivapi.searchItems(ITEM_NAME, searchLang, MAX_RESULTS)
+local results
+local usedLanguage
+
+if LANGUAGE == "all" then
+    results, usedLanguage = searchWithFallback(ITEM_NAME, MAX_RESULTS)
+else
+    usedLanguage = LANGUAGE
+    log.info("Suche '%s' via XIVAPI (Sprache: %s)...", ITEM_NAME, usedLanguage)
+    results = xivapi.searchItems(ITEM_NAME, usedLanguage, MAX_RESULTS)
+end
 
 if not results then
     log.error("XIVAPI-Anfrage fehlgeschlagen! Ist eine Internetverbindung vorhanden?")
@@ -54,6 +79,10 @@ end
 if #results == 0 then
     log.warn("Keine Treffer fuer '%s'. Pruefe Rechtschreibung oder andere Sprache.", ITEM_NAME)
     return
+end
+
+if usedLanguage and LANGUAGE == "all" then
+    log.info("Treffer ueber Sprache '%s' gefunden.", usedLanguage)
 end
 
 -- 2. Ergebnisse anzeigen
@@ -85,10 +114,10 @@ if LANGUAGE == "all" then
              .. '                },\n'
              .. '            },',
                 item.id,
-                item.name.en,
-                item.name.de,
-                item.name.fr,
-                item.name.ja
+                escapeLuaString(item.name.en),
+                escapeLuaString(item.name.de),
+                escapeLuaString(item.name.fr),
+                escapeLuaString(item.name.ja)
             )
             clipLines[#clipLines + 1] = block
         else

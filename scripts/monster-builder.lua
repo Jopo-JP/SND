@@ -13,9 +13,12 @@ description: >-
   3. Jedes Mal wird die aktuelle Position als Waypoint hinzugefuegt
   4. Das Ergebnis liegt immer aktuell in der Zwischenablage
 
-  Der Monster-Name muss manuell eingetragen werden (da er zur
-  Spielclient-Sprache passen muss fuer /target).
 configs:
+  monsterName:
+    default: "MONSTER_NAME_HIER"
+    description: Monster-Name fuer /target (muss zur Client-Sprache passen)
+    type: string
+    required: true
   itemName:
     default: ""
     description: Item-Name oder Item-ID (leer = nur Waypoints sammeln)
@@ -39,8 +42,17 @@ local xivapi = require("lib/xivapi")
 
 log.level = "INFO"
 
+local MONSTER_NAME   = Config.Get("monsterName")
 local ITEM_NAME      = Config.Get("itemName")
 local RESET          = Config.Get("resetWaypoints")
+
+local function escapeLuaString(value)
+    return tostring(value)
+        :gsub("\\", "\\\\")
+        :gsub("\n", "\\n")
+        :gsub("\r", "\\r")
+        :gsub('"', '\\"')
+end
 
 -- ======================================================================
 -- Waypoint-Parsing (gleiche Logik wie positions-helper)
@@ -60,10 +72,10 @@ end
 -- Monster-Entry formatieren
 -- ======================================================================
 
-local function formatEntry(itemData, waypoints)
+local function formatEntry(monsterName, itemData, waypoints)
     local lines = {}
     lines[#lines + 1] = "    {"
-    lines[#lines + 1] = '        name = "MONSTER_NAME_HIER",  -- /target Name eintragen!'
+    lines[#lines + 1] = string.format('        name = "%s",', escapeLuaString(monsterName))
     lines[#lines + 1] = "        waypoints = {"
 
     for _, wp in ipairs(waypoints) do
@@ -77,10 +89,10 @@ local function formatEntry(itemData, waypoints)
         lines[#lines + 1] = "            {"
         lines[#lines + 1] = string.format("                id = %d,", itemData.id)
         lines[#lines + 1] = "                name = {"
-        lines[#lines + 1] = string.format('                    en = "%s",', itemData.name.en)
-        lines[#lines + 1] = string.format('                    de = "%s",', itemData.name.de)
-        lines[#lines + 1] = string.format('                    fr = "%s",', itemData.name.fr)
-        lines[#lines + 1] = string.format('                    ja = "%s",', itemData.name.ja)
+        lines[#lines + 1] = string.format('                    en = "%s",', escapeLuaString(itemData.name.en))
+        lines[#lines + 1] = string.format('                    de = "%s",', escapeLuaString(itemData.name.de))
+        lines[#lines + 1] = string.format('                    fr = "%s",', escapeLuaString(itemData.name.fr))
+        lines[#lines + 1] = string.format('                    ja = "%s",', escapeLuaString(itemData.name.ja))
         lines[#lines + 1] = "                },"
         lines[#lines + 1] = "            },"
     else
@@ -158,8 +170,8 @@ else
 end
 
 -- 5. Entry formatieren und in Zwischenablage
-local entry = formatEntry(itemData, waypoints)
+local entry = formatEntry(MONSTER_NAME, itemData, waypoints)
 System.SetClipboardText(entry)
 
 log.info("=== Monster-Entry in Zwischenablage (%d Waypoints) ===", #waypoints)
-log.info("Einfach in data/monsters.lua einfuegen und Monster-Name anpassen!")
+log.info("Einfach in data/monsters.lua einfuegen.")
