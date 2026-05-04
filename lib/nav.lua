@@ -134,8 +134,11 @@ end
 function M.walkToTarget(mobName, killRange, maxSteps)
     maxSteps = maxSteps or 50
 
-    for step = 1, maxSteps do
+    if not entity.hasTarget() then
         utils.tryTargetByName(mobName)
+    end
+
+    for step = 1, maxSteps do
         if not entity.hasTarget() then
             M.stop()
             log.warn("Target verloren!")
