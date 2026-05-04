@@ -94,9 +94,12 @@ end
 -- Monster-Entry formatieren
 -- ======================================================================
 
-local function formatEntry(monsterName, itemData, waypoints)
+local function formatEntry(monsterName, monsterNameId, itemData, waypoints)
     local lines = {}
     lines[#lines + 1] = "    {"
+    if monsterNameId then
+        lines[#lines + 1] = string.format("        name_id = %d,", monsterNameId)
+    end
     if type(monsterName) == "table" then
         lines[#lines + 1] = "        name = {"
         lines[#lines + 1] = string.format('            en = "%s",', escapeLuaString(monsterName.en))
@@ -142,12 +145,14 @@ end
 
 -- 0. Monster-Namen aufloesen
 local monsterNameData = MONSTER_NAME
+local monsterNameId = nil
 if MONSTER_NAME and MONSTER_NAME ~= "" then
     local mobResult, mobLang = searchMobWithFallback(MONSTER_NAME)
     if mobResult then
         log.info("Monster gefunden ueber Sprache '%s': ID %d - Lade alle Sprachen...", mobLang, mobResult.id)
         local mobNames = xivapi.getMobNameAllLanguages(mobResult.id)
         if mobNames and mobNames.singular then
+            monsterNameId = mobNames.id
             monsterNameData = mobNames.singular
             log.info("Monster: de=%s | en=%s | fr=%s | ja=%s",
                 mobNames.singular.de,
@@ -221,7 +226,7 @@ else
 end
 
 -- 5. Entry formatieren und in Zwischenablage
-local entry = formatEntry(monsterNameData, itemData, waypoints)
+local entry = formatEntry(monsterNameData, monsterNameId, itemData, waypoints)
 System.SetClipboardText(entry)
 
 log.info("=== Monster-Entry in Zwischenablage (%d Waypoints) ===", #waypoints)

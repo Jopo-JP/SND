@@ -146,6 +146,7 @@ Beispiel Output:
 
 ```lua
     {
+        name_id = 3471,
         name = {
             en = "deepeye",
             de = "Glotzauge",
@@ -175,6 +176,12 @@ Beispiel Output:
 ### `data/monsters.lua`
 
 Monster koennen als einzelner String oder multilingualer Table vorliegen:
+
+Optional kann `name_id` gesetzt werden, wenn die `BNpcName` row_id bekannt ist:
+
+```lua
+name_id = 3471
+```
 
 ```lua
 name = "Glotzauge"

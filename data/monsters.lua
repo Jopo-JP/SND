@@ -4,6 +4,7 @@
 --
 -- Monster-Format:
 --   name  = "..." oder { en = "...", de = "...", fr = "...", ja = "..." }
+--   name_id = optionale BNpcName row_id aus XIVAPI
 --           Fuer /target probiert das Skript die verfuegbaren Sprachen
 --           nacheinander, falls die Client-Sprache nicht bekannt ist.
 --
@@ -35,6 +36,7 @@ local monsters = {
         },
     },
     {
+        name_id = 3471,
         name = {
             en = "deepeye",
             de = "Glotzauge",
@@ -42,15 +44,15 @@ local monsters = {
             ja = "ディープアイ",
         },
         waypoints = {
-            { x = 414.3, y = 174.6, z = 454.5 },
-            { x = 449.5, y = 170.6, z = 431.7 },
-            { x = 451.4, y = 168.9, z = 419.2 },
-            { x = 434.9, y = 174.8, z = 385.7 },
-            { x = 475.2, y = 164.2, z = 356.0 },
-            { x = 449.7, y = 164.7, z = 307.8 },
-            { x = 414.4, y = 168.5, z = 269.0 },
-            { x = 367.6, y = 166.0, z = 241.8 },
-            { x = 337.0, y = 171.1, z = 226.0 },
+            { x = 414.5, y = 174.7, z = 455.4 },
+            { x = 453.4, y = 169.4, z = 424.9 },
+            { x = 439.7, y = 173.1, z = 390.8 },
+            { x = 466.9, y = 166.4, z = 349.2 },
+            { x = 467.2, y = 164.4, z = 301.3 },
+            { x = 445.6, y = 176.2, z = 224.3 },
+            { x = 386.3, y = 167.6, z = 188.6 },
+            { x = 336.1, y = 171.1, z = 226.5 },
+            { x = 392.2, y = 166.9, z = 314.0 },
         },
         drops = {
             {

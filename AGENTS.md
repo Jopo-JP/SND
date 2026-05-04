@@ -53,6 +53,7 @@ scripts/
 Grund:
 
 - `/target <name>` muss exakt zur Sprache des Clients passen.
+- Optional kann `name_id` als `BNpcName` row_id gespeichert werden.
 - Falls `monster.name` ein multilingualer Table ist, probiert das Skript die
   verfuegbaren Sprachen nacheinander.
 - Falls `monster.name` ein einzelner String ist, bleibt das Verhalten wie bisher.
