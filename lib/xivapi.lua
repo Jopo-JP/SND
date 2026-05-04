@@ -165,16 +165,31 @@ end
 -- @param itemId number Item-ID
 -- @return table|nil {id, name={en, de, fr, ja}} oder nil
 function M.getItemAllLanguages(itemId)
-    local LANGS = { "en", "de", "fr", "ja" }
-    local names = {}
+    local url = string.format(
+        "%s/sheet/Item/%d?fields=Name@lang(en),Name@lang(de),Name@lang(fr),Name@lang(ja)",
+        M.BASE_URL,
+        itemId
+    )
 
-    for _, lang in ipairs(LANGS) do
-        local item = M.getItem(itemId, lang)
-        if not item then
-            log.error("XIVAPI-Abfrage fehlgeschlagen fuer Sprache '%s'", lang)
-            return nil
-        end
-        names[lang] = item.name
+    local body = httpGet(url)
+    if not body then return nil end
+
+    local ok, data = pcall(json.decode, body)
+    if not ok or not data or not data.fields then
+        log.error("Multilinguales Item-JSON konnte nicht gelesen werden")
+        return nil
+    end
+
+    local names = {
+        en = data.fields["Name@lang(en)"],
+        de = data.fields["Name@lang(de)"],
+        fr = data.fields["Name@lang(fr)"],
+        ja = data.fields["Name@lang(ja)"],
+    }
+
+    if not (names.en and names.de and names.fr and names.ja) then
+        log.error("Multilinguale XIVAPI-Antwort unvollstaendig fuer Item ID %d", itemId)
+        return nil
     end
 
     return {
