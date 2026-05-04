@@ -221,32 +221,30 @@ local ok, err = xpcall(function()
 
     while not isDone() do
         local wp = waypoints[wpIdx]
-        local clearedArea = false
+        local waypointDone = false
+        local wpCenter = { x = wp.x, y = wp.y, z = wp.z }
 
-        while not isDone() and not clearedArea do
-            combat.scanAndKill(mobName, isDone, onKill)
-
-            if isDone() then break end
-
-            local areaKillsBeforeMove = kills
+        while not isDone() and not waypointDone do
             log.debug("Laufe zu Waypoint %d: %.1f/%.1f/%.1f", wpIdx, wp.x, wp.y, wp.z)
             local moveStatus = nav.moveTo(wp.x, wp.y, wp.z, mobName)
 
             if moveStatus == "arrived" then
-                log.debug("Waypoint %d erreicht - Bereich leer.", wpIdx)
-                clearedArea = true
+                -- Waypoint erreicht. Nur wenn im Bereich kein weiterer Mob steht,
+                -- wechseln wir weiter. Sonst bleiben wir im Clear-Mode.
+                local areaKills = combat.scanAndKill(mobName, isDone, onKill, wpCenter)
+                if isDone() then break end
+                if areaKills == 0 then
+                    log.debug("Waypoint %d komplett gecleart.", wpIdx)
+                    waypointDone = true
+                else
+                    log.debug("Waypoint %d: weitere Mobs im Bereich erledigt, pruefe erneut.", wpIdx)
+                end
             elseif moveStatus == "mob" or moveStatus == "combat" then
-                log.debug("Wegpunkt %d wegen Mob unterbrochen - Bereich wird weiter gecleart.", wpIdx)
+                log.debug("Waypoint %d unterbrochen - area clear um den Waypoint.", wpIdx)
+                combat.scanAndKill(mobName, isDone, onKill, wpCenter)
             else
                 log.warn("Waypoint %d nicht sauber erreicht (%s) - gehe weiter.", wpIdx, tostring(moveStatus))
-                clearedArea = true
-            end
-
-            if areaKillsBeforeMove == kills and moveStatus ~= "arrived" then
-                -- Kein Fortschritt auf dem Weg und auch kein neuer Kill:
-                -- nicht an diesem Punkt festhaengen.
-                log.debug("Kein neuer Fortschritt an Waypoint %d - gehe weiter.", wpIdx)
-                clearedArea = true
+                waypointDone = true
             end
         end
 

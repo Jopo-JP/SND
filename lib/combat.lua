@@ -95,8 +95,9 @@ end
 -- @param mobName string Mob-Name zum Targeting
 -- @param isDoneFn function Callback das prüft ob Farm-Ziel erreicht
 -- @param onKillFn function|nil Callback nach jedem Kill (optional)
+-- @param scanCenter table|nil Optionaler Ankerpunkt {x, y, z} fuer den Clear-Bereich
 -- @return number Anzahl Kills in dieser Runde
-function M.scanAndKill(mobName, isDoneFn, onKillFn)
+function M.scanAndKill(mobName, isDoneFn, onKillFn, scanCenter)
     local areaKills = 0
 
     while not isDoneFn() do
@@ -109,9 +110,9 @@ function M.scanAndKill(mobName, isDoneFn, onKillFn)
         end
 
         local tPos = entity.getTargetPos()
-        local myPos = entity.getPlayerPos()
-        if tPos and myPos then
-            local d = utils.distBetween(myPos, tPos)
+        local origin = scanCenter or entity.getPlayerPos()
+        if tPos and origin then
+            local d = utils.distBetween(origin, tPos)
             if d > M.SCAN_RANGE then
                 log.debug("Mob zu weit (%.0fy) - weitergehen", d)
                 break
