@@ -133,11 +133,23 @@ decodeValue = function(str, pos)
     error("JSON: unexpected character '" .. c .. "' at pos " .. pos)
 end
 
+--- Entfernt UTF-8 BOM falls vorhanden.
+-- PowerShell schreibt auf aelteren Windows-Versionen eine BOM (EF BB BF).
+-- @param str string Input
+-- @return string Ohne BOM
+local function stripBOM(str)
+    if str:byte(1) == 0xEF and str:byte(2) == 0xBB and str:byte(3) == 0xBF then
+        return str:sub(4)
+    end
+    return str
+end
+
 --- Dekodiert einen JSON-String in eine Lua-Tabelle.
 -- @param str string JSON-String
 -- @return any Lua-Wert (table, string, number, boolean, nil)
 function M.decode(str)
     if not str or str == "" then return nil end
+    str = stripBOM(str)
     local val, _ = decodeValue(str, 1)
     return val
 end

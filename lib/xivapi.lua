@@ -38,9 +38,9 @@ local function httpGetAsync(url)
     log.debug("HTTP GET (async): %s", url)
 
     -- PowerShell-Befehl: Invoke-RestMethod schreibt direkt in Datei
-    -- Start-Process -WindowStyle Hidden startet non-blocking
+    -- [System.IO.File]::WriteAllText vermeidet BOM auf allen PS-Versionen
     local psScript = string.format(
-        "try { Invoke-RestMethod -Uri '%s' | ConvertTo-Json -Depth 10 | Set-Content -Path '%s' -Encoding UTF8 } catch { Set-Content -Path '%s' -Value ('ERROR: ' + $_.Exception.Message) -Encoding UTF8 }",
+        "try { $r = Invoke-RestMethod -Uri '%s' | ConvertTo-Json -Depth 10; [System.IO.File]::WriteAllText('%s', $r) } catch { [System.IO.File]::WriteAllText('%s', 'ERROR: ' + $_.Exception.Message) }",
         url, outFile, outFile
     )
 
