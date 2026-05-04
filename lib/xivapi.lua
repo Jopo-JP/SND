@@ -28,12 +28,12 @@ end
 local function httpGet(url)
     log.debug("HTTP GET: %s", url)
 
-    -- PowerShell-Befehl:
-    -- -NoProfile: Schnellerer Start
-    -- -Command:   Invoke-RestMethod gibt direkt JSON zurueck
-    -- [Console]::OutputEncoding sicherstellen dass UTF-8 ohne BOM auf stdout kommt
+    -- chcp 65001:       Setzt die Konsolen-Codepage auf UTF-8
+    -- [Console]::Out:   Explizit UTF-8 ohne BOM auf stdout
+    -- Invoke-RestMethod: Gibt JSON zurueck
+    -- -Compress:        Einzeilige Ausgabe
     local cmd = string.format(
-        'powershell.exe -NoProfile -Command "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); Invoke-RestMethod -Uri \'%s\' | ConvertTo-Json -Depth 10 -Compress"',
+        'chcp 65001 >nul & powershell.exe -NoProfile -Command "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); Invoke-RestMethod -Uri \'%s\' | ConvertTo-Json -Depth 10 -Compress"',
         url
     )
 
@@ -123,6 +123,28 @@ function M.getItem(itemId, language)
     return {
         id   = data.row_id,
         name = data.fields and data.fields.Name or ("Item#" .. itemId),
+    }
+end
+
+--- Liest ein Item in allen 4 Sprachen (en, de, fr, ja).
+-- @param itemId number Item-ID
+-- @return table|nil {id, name={en, de, fr, ja}} oder nil
+function M.getItemAllLanguages(itemId)
+    local LANGS = { "en", "de", "fr", "ja" }
+    local names = {}
+
+    for _, lang in ipairs(LANGS) do
+        local item = M.getItem(itemId, lang)
+        if not item then
+            log.error("XIVAPI-Abfrage fehlgeschlagen fuer Sprache '%s'", lang)
+            return nil
+        end
+        names[lang] = item.name
+    end
+
+    return {
+        id   = itemId,
+        name = names,
     }
 end
 
