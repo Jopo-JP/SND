@@ -240,8 +240,9 @@ local ok, err = xpcall(function()
                     log.debug("Waypoint %d: weitere Mobs im Bereich erledigt, pruefe erneut.", wpIdx)
                 end
             elseif moveStatus == "mob" or moveStatus == "combat" then
-                log.debug("Waypoint %d unterbrochen - area clear um den Waypoint.", wpIdx)
-                combat.scanAndKill(mobName, isDone, onKill, wpCenter)
+                log.debug("Waypoint %d unterbrochen - area clear ab aktueller Position.", wpIdx)
+                local currentPos = entity.getPlayerPos() or wpCenter
+                combat.scanAndKill(mobName, isDone, onKill, currentPos)
             else
                 log.warn("Waypoint %d nicht sauber erreicht (%s) - gehe weiter.", wpIdx, tostring(moveStatus))
                 waypointDone = true
