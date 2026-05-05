@@ -16,7 +16,8 @@ Das Repo soll:
 
 ```text
 data/
-  monsters.lua         Statische Monster-Datenbank
+  monsters.lua         Manuelle Farm-Quellen / Monster-Datenbank
+  generated/           Vom externen Exporter erzeugte XIVAPI-Lua-Daten
 
 lib/
   combat.lua           Kampf-Loop, Pull, Kill, Scan
@@ -33,6 +34,9 @@ scripts/
   item-search.lua      Item-Suche + multilingualer Drop-Export
   monster-builder.lua  Monster-Eintrag mit Waypoints + BNpcName + Item erstellen
   positions-helper.lua Waypoints sammeln
+
+tools/
+  export_xivapi_data.py Externer XIVAPI-v2-Exporter fuer data/generated/*.lua
 ```
 
 ## Wie SND hier genutzt wird
@@ -48,19 +52,36 @@ scripts/
 - `data/monsters.lua` enthaelt nur Daten.
 - Logik lebt in `lib/` und `scripts/`.
 
-### 2. Monster-Namen sind optional multilingual
+### 2. Farm-Quellen sind ID-basiert
+
+`data/monsters.lua` enthaelt manuelle Farm-Quellen im Format:
+
+```lua
+{
+  key = "deepeye-coerthas-western-highlands",
+  bnpc_name_id = 3471,
+  territory_id = 397,
+  map_id = 211,
+  item_ids = { 12628 },
+  waypoints = { ... },
+}
+```
+
+Namen werden ueber `data/generated/*.lua` aufgeloest. Dadurch kann ein Drop in
+mehreren Farm-Quellen vorkommen. `scripts/farm.lua` nutzt dann bei Mehrdeutigkeit
+die optionale Config `farmSource`.
+
+### 3. Monster-Namen sind weiterhin multilingual zur Laufzeit
 
 Grund:
 
 - `/target <name>` muss exakt zur Sprache des Clients passen.
-- Optional kann `name_id` als `BNpcName` row_id gespeichert werden.
-- Falls `monster.name` ein multilingualer Table ist, probiert das Skript die
-  verfuegbaren Sprachen nacheinander.
-- Falls `monster.name` ein einzelner String ist, bleibt das Verhalten wie bisher.
+- `bnpc_name_id` verweist auf `data/generated/bnpc_names.lua`.
+- Das Farm-Skript probiert die verfuegbaren Sprachen nacheinander.
 
-### 3. Drop-Namen sind multilingual
+### 4. Drop-Namen sind generiert multilingual
 
-Drop-Eintraege enthalten:
+Drop-IDs stehen in `item_ids`; Namen kommen aus `data/generated/items.lua`:
 
 ```lua
 {
@@ -74,7 +95,7 @@ Drop-Eintraege enthalten:
 }
 ```
 
-### 4. XIVAPI statt lokaler Excel-Iteration
+### 5. XIVAPI statt lokaler Excel-Iteration
 
 Lokale Iteration ueber tausende Rows hat starkes Lag verursacht.
 
@@ -84,7 +105,19 @@ Aktueller Workaround:
 - die Antwort wird als Base64 ueber stdout transportiert
 - Lua dekodiert Base64 und parsed JSON lokal
 
-### 5. Clipboard-first Workflow
+Zusaetzlich gibt es `tools/export_xivapi_data.py` fuer externe Datenexports.
+Dieser Weg ist langfristig bevorzugt fuer wiederverwendbare Stammdaten, weil er
+HTTP aus dem SND/Game-Thread entfernt. `data/generated/*.lua` ist generiert und
+soll nicht manuell editiert werden.
+
+Der Exporter cached erfolgreiche Daten in `data/generated/_xivapi_export_cache.json`.
+Sauber fehlende oder leere IDs werden unter `_missing` mit Status `not_found`
+oder `empty` notiert. Echte Request-/Access-/Netzwerkfehler brechen ab und
+werden nicht als fehlende IDs gespeichert. Bekannte fehlende IDs koennen mit
+`python tools/export_xivapi_data.py retry-missing --type item` gezielt erneut
+probiert werden.
+
+### 6. Clipboard-first Workflow
 
 Der Nutzer arbeitet stark mit Copy/Paste.
 
@@ -92,8 +125,8 @@ Deshalb:
 
 - `positions-helper.lua` schreibt Waypoints in die Zwischenablage
 - `item-search.lua` schreibt fertige Drop-Bloecke in die Zwischenablage
-- `monster-builder.lua` schreibt fast fertige Monster-Bloecke in die Zwischenablage
-- `monster-builder.lua` nutzt `BNpcName.Singular`, um Monster-Namen multilingual zu exportieren
+- `monster-builder.lua` schreibt fertige ID-basierte Farm-Source-Bloecke in die Zwischenablage
+- `monster-builder.lua` kann mehrere `itemIds` comma-separiert verarbeiten
 
 ## Bekannte Probleme
 
@@ -134,13 +167,14 @@ Deshalb:
 ## Offene TODOs
 
 - Client-Sprache direkt aus SND/Dalamud lesen, falls spaeter verfuegbar
-- Zone/Territory pro Monster erfassen (ID + Name) und vor dem Farmen pruefen;
+- Aktuelle Territory-ID im Spiel erkennen und gegen `territory_id` pruefen;
   bei falscher Zone soll das Skript mit klarer Meldung abbrechen
 - Farm-Loop spaeter als expliziten Zustandsautomaten umbauen, damit Mobs immer
   vor Waypoints priorisiert werden und das aktuelle Ziel stabil verfolgt wird
-- Item-Suche `language = all` mit Fallback-Reihenfolge statt nur `de`
-- Mehrere Drops pro Monster ueber Builder unterstuetzen
-- XIVAPI optional cachen
+- Alte HTTP-basierten SND-Tools langfristig durch externen Exporter ersetzen
+- Drop-Zuweisung pro Farm-Quelle validieren, aber Waypoints bleiben manuell
+- Exporter-Cache spaeter ggf. komprimieren oder selektiv bereinigen, falls
+  `data/generated/_xivapi_export_cache.json` zu gross wird
 - Wenn moeglich langfristig C#-seitiges HTTP-Modul in SND statt PowerShell
 
 ## Wichtige User-Praeferenzen aus dieser Session

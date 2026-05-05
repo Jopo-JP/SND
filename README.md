@@ -8,6 +8,7 @@ Dieses Repo enthaelt:
 - Hilfsskripte zum Sammeln von Waypoints
 - Tools zum Nachschlagen von Item-IDs und multilingualen Item-Namen
 - einen Monster-Entry-Builder fuer `data/monsters.lua`
+- einen externen XIVAPI-Exporter fuer lokale Lua-Daten
 
 ## Ziel
 
@@ -23,7 +24,13 @@ Statt einer grossen Datei wird die Logik in Module aufgeteilt:
 ```text
 snd/
 ├── data/
-│   └── monsters.lua
+│   ├── monsters.lua
+│   └── generated/
+│       ├── items.lua
+│       ├── bnpc_names.lua
+│       ├── territories.lua
+│       ├── maps.lua
+│       └── place_names.lua
 ├── lib/
 │   ├── combat.lua
 │   ├── entity.lua
@@ -38,6 +45,8 @@ snd/
 │   ├── item-search.lua
 │   ├── monster-builder.lua
 │   └── positions-helper.lua
+├── tools/
+│   └── export_xivapi_data.py
 ├── AGENTS.md
 ├── CLAUDE.md
 └── README.md
@@ -81,7 +90,8 @@ Funktionen:
 
 - sucht das Farm-Ziel in `data/monsters.lua`
 - unterstuetzt Suche nach Item-ID oder Item-Name
-- unterstuetzt mehrsprachige Drop-Namen (`en`, `de`, `fr`, `ja`)
+- loest Item-/Monster-Namen aus `data/generated/*.lua`
+- unterstuetzt `farmSource`, wenn mehrere Quellen dasselbe Item droppen
 - laeuft Waypoints ab
 - targetet Mobs, bewegt sich via `vnavmesh`, pullt und wartet auf Kampfende
 
@@ -91,6 +101,8 @@ Wichtige Module:
 - `lib/nav.lua`
 - `lib/entity.lua`
 - `lib/inventory.lua`
+- `lib/farm_db.lua`
+- `lib/game_data.lua`
 - `lib/utils.lua`
 
 ### `scripts/item-search.lua`
@@ -131,93 +143,188 @@ Funktionen:
 
 ### `scripts/monster-builder.lua`
 
-Baut einen fast fertigen Eintrag fuer `data/monsters.lua`.
+Baut einen ID-basierten Farm-Source-Eintrag fuer `data/monsters.lua`.
 
 Funktionen:
 
-- `monsterName` konfigurierbar
-- `itemName` oder `itemId` konfigurierbar
+- `sourceKey`, `monsterName` oder `bnpcNameId` konfigurierbar
+- `itemIds` akzeptiert IDs und Namen comma-separiert
+- `territoryId` und `mapId` optional
+- `mode = add|undo|preview|reset`
 - sammelt Waypoints wie `positions-helper.lua`
-- sucht Monster-Namen ueber `BNpcName` und exportiert sie multilingual
-- laedt Item-Namen in `en`, `de`, `fr`, `ja`
-- kopiert den kompletten Monster-Block in die Zwischenablage
+- sucht IDs nur wenn noetig ueber `lib/xivapi.lua`
+- kopiert den kompletten Farm-Source-Block in die Zwischenablage
 
 Beispiel Output:
 
 ```lua
     {
-        name_id = 3471,
-        name = {
-            en = "deepeye",
-            de = "Glotzauge",
-            fr = "oculus",
-            ja = "ディープアイ",
+        key = "deepeye-coerthas-western-highlands",
+        bnpc_name_id = 3471,
+        territory_id = 397,
+        map_id = 211,
+        item_ids = {
+            12628,
         },
         waypoints = {
             { x = 48.4, y = -16.0, z = 152.8 },
             { x = 46.7, y = -16.0, z = 154.1 },
         },
-        drops = {
-            {
-                id = 12628,
-                name = {
-                    en = "Deepeye Tears",
-                    de = "Glotzaugen-Tränen",
-                    fr = "Larme d'oculus",
-                    ja = "ディープアイの涙",
-                },
-            },
-        },
     },
 ```
+
+## Externer XIVAPI-Exporter
+
+`tools/export_xivapi_data.py` laeuft ausserhalb von SND und erzeugt lokale Lua-Dateien in `data/generated/`.
+
+Ziel:
+
+- IDs extern validieren
+- Namen in `en`, `de`, `fr`, `ja` exportieren
+- SND-Lag durch HTTP-Requests im Spiel reduzieren
+- `data/monsters.lua` mit lokalen Stammdaten aus `data/generated/*.lua` verbinden
+
+Der Exporter nutzt nur die Python-Standardbibliothek.
+
+### Suche nach IDs
+
+Wenn eine ID nicht bekannt ist, kann zuerst gesucht werden:
+
+```bash
+python tools/export_xivapi_data.py search item "Glotzaugen-Tränen" --language de
+python tools/export_xivapi_data.py search mob "deepeye" --language all
+python tools/export_xivapi_data.py search territory "Coerthas" --language en
+python tools/export_xivapi_data.py search map "Coerthas" --language en
+python tools/export_xivapi_data.py search place_name "Coerthas" --language all
+```
+
+Wichtig:
+
+- `mob` sucht in `BNpcName.Singular`, also dem Namen, der fuer `/target` relevant ist.
+- `territory` sucht in `TerritoryType.PlaceName.Name`.
+- `--language all` sucht nacheinander in `en`, `de`, `fr`, `ja` und dedupliziert IDs.
+
+### Export nach Lua
+
+Einzelne IDs und Bereiche koennen kombiniert werden:
+
+```bash
+python tools/export_xivapi_data.py export \
+  --items 12628,5496,500-510 \
+  --mobs 3471,7422 \
+  --territories 397 \
+  --maps 211 \
+  --place-names 25,508,2200
+```
+
+Unterstuetzte ID-Syntax:
+
+```text
+1
+1,5,50
+50-80
+1,5,50-80,120
+```
+
+Normale Exports fuegen neue IDs zum JSON-Cache unter `data/generated/_xivapi_export_cache.json` hinzu und schreiben daraus die Lua-Dateien neu.
+Bereits vorhandene IDs werden dabei standardmaessig uebersprungen und nicht erneut von XIVAPI geladen.
+
+IDs, die bei einem sauberen XIVAPI-Result nicht existieren oder leere Felder liefern, werden im Cache unter `_missing` notiert. Echte Request-Fehler wie Access-Denied, kaputte Antwort oder Netzwerkfehler brechen den Export ab und werden nicht als fehlende ID gespeichert.
+
+Mit `--refresh` werden angefragte IDs trotz Cache neu geladen:
+
+```bash
+python tools/export_xivapi_data.py export --items 12628 --refresh
+```
+
+Bekannte fehlende/leere IDs anzeigen:
+
+```bash
+python tools/export_xivapi_data.py missing
+python tools/export_xivapi_data.py missing --type item
+```
+
+Nur bekannte fehlende/leere IDs erneut probieren:
+
+```bash
+python tools/export_xivapi_data.py retry-missing
+python tools/export_xivapi_data.py retry-missing --type item
+```
+
+Alternativ koennen bekannte fehlende IDs in einem normalen Export gezielt erneut probiert werden:
+
+```bash
+python tools/export_xivapi_data.py export --items 999999 --retry-missing
+```
+
+Mit `--replace` werden die betroffenen Datentypen neu aufgebaut:
+
+```bash
+python tools/export_xivapi_data.py export --items 12628 --replace
+```
+
+Generierte Dateien:
+
+- `data/generated/items.lua`
+- `data/generated/bnpc_names.lua`
+- `data/generated/territories.lua`
+- `data/generated/maps.lua`
+- `data/generated/place_names.lua`
+
+Optional technisch:
+
+- `data/generated/bnpc_bases.lua`
+
+`BNpcBase` ist nicht der lokalisierte Monstername. Fuer Farming und `/target` ist normalerweise `BNpcName` wichtiger.
+
+### Drops zuweisen
+
+Der Exporter prueft und exportiert Item-/Monster-/Territory-Daten, weist Drops aber noch nicht automatisch Monstern zu.
+
+`data/monsters.lua` nutzt Farm-Source-Eintraege mit IDs:
+
+```lua
+{
+    key = "deepeye-coerthas-western-highlands",
+    bnpc_name_id = 3471,
+    territory_id = 397,
+    map_id = 211,
+    item_ids = { 12628, 5496 },
+    waypoints = {
+        { x = 414.5, y = 174.7, z = 455.4 },
+    },
+}
+```
+
+Damit kann ein Drop mehreren Farm-Quellen zugewiesen werden, ohne Item-Namen mehrfach zu duplizieren. Waypoints bleiben manuell, weil sie die praktisch getestete Route beschreiben.
 
 ## Datenmodell
 
 ### `data/monsters.lua`
 
-Monster koennen als einzelner String oder multilingualer Table vorliegen:
-
-Optional kann `name_id` gesetzt werden, wenn die `BNpcName` row_id bekannt ist:
-
-```lua
-name_id = 3471
-```
-
-```lua
-name = "Glotzauge"
-```
-
-oder:
-
-```lua
-name = {
-    en = "deepeye",
-    de = "Glotzauge",
-    fr = "oculus",
-    ja = "ディープアイ",
-}
-```
-
-Grund:
-
-- SND/Lua bekommt die Client-Sprache aktuell nicht direkt sauber geliefert
-- deshalb probiert das Skript bei multilingualen Monster-Namen die verfuegbaren
-  Namen nacheinander fuer `/target`
-- ein einfacher String funktioniert weiterhin genauso wie bisher
-
-Drops sind multilingual:
+Die Datei enthaelt manuelle Farm-Quellen. Ein Eintrag beschreibt eine konkrete Route fuer ein Monster in einer Zone.
 
 ```lua
 {
-    id = 12628,
-    name = {
-        en = "Deepeye Tears",
-        de = "Glotzaugen-Tränen",
-        fr = "Larme d'oculus",
-        ja = "ディープアイの涙",
+    key = "deepeye-coerthas-western-highlands",
+    bnpc_name_id = 3471,
+    territory_id = 397,
+    map_id = 211,
+    item_ids = { 12628, 5496 },
+    waypoints = {
+        { x = 414.5, y = 174.7, z = 455.4 },
     },
 }
 ```
+
+Namen und mehrsprachige Daten werden nicht mehr manuell dupliziert. Sie kommen aus:
+
+- `data/generated/items.lua`
+- `data/generated/bnpc_names.lua`
+- `data/generated/territories.lua`
+- `data/generated/maps.lua`
+
+Mehrere Farm-Quellen duerfen dieselbe `item_id` enthalten. Wenn `farmItem` dadurch mehrdeutig wird, muss `farmSource` auf den `key` gesetzt werden.
 
 ## Wie alles zusammenhaengt
 
@@ -225,22 +332,22 @@ Drops sind multilingual:
 
 `scripts/farm.lua`:
 
-1. liest `farmItem` und `farmQty` aus SND Config
-2. sucht passendes Monster in `data/monsters.lua`
-3. nutzt `lib/inventory.lua` fuer Item-Count / Item-ID-Aufloesung
-4. nutzt `lib/nav.lua` fuer Bewegung
-5. nutzt `lib/combat.lua` fuer Pull/Kill-Loop
+1. liest `farmItem`, `farmSource` und `farmQty` aus SND Config
+2. loest Farm-Quellen ueber `lib/farm_db.lua`
+3. liest Stammdaten aus `data/generated/*.lua` ueber `lib/game_data.lua`
+4. nutzt `lib/inventory.lua` fuer Item-Count
+5. nutzt `lib/nav.lua` fuer Bewegung
+6. nutzt `lib/combat.lua` fuer Pull/Kill-Loop
 
 ### Builder-Pfad
 
 `scripts/monster-builder.lua`:
 
-1. liest `monsterName` und `itemName`
-2. sucht Monster ueber `BNpcName` in `lib/xivapi.lua`
-3. sucht Item ueber `lib/xivapi.lua`
-4. liest aktuelle Position ueber `lib/entity.lua`
-5. sammelt Waypoints aus der Zwischenablage
-6. kopiert fertigen Eintrag zurueck in die Zwischenablage
+1. liest `sourceKey`, `monsterName`/`bnpcNameId`, `itemIds`, `territoryId`, `mapId`
+2. sucht fehlende IDs bei Bedarf ueber `lib/xivapi.lua`
+3. liest aktuelle Position ueber `lib/entity.lua`
+4. sammelt Waypoints aus der Zwischenablage
+5. kopiert fertigen Farm-Source-Eintrag zurueck in die Zwischenablage
 
 ### API-Pfad
 
@@ -287,7 +394,7 @@ Status: teilweise umgesetzt.
 
 Aktueller Stand:
 
-- `monster.name` kann jetzt multilingual sein
+- `bnpc_name_id` wird ueber `data/generated/bnpc_names.lua` zu multilingualen Namen aufgeloest
 - fuer `/target` werden die verfuegbaren Sprachvarianten nacheinander probiert
 
 Einschraenkung:
@@ -295,11 +402,11 @@ Einschraenkung:
 - es gibt noch keine direkte Client-Spracherkennung in diesem Repo
 - dadurch entstehen pro Target-Versuch ggf. mehrere `/target`-Aufrufe
 
-### 4. Item-Suche mit `language = all` sucht initial in `de`
+### 4. Item-Suche im alten SND-Tool nutzt weiterhin HTTP
 
 Status: bekannt.
 
-Aktuell wird fuer die initiale Suche standardmaessig `de` verwendet. Danach werden alle Sprachen ueber die gefundene ID geladen.
+`scripts/item-search.lua` nutzt weiterhin `lib/xivapi.lua`. Der bevorzugte neue Weg fuer Stammdaten ist `tools/export_xivapi_data.py` ausserhalb von SND.
 
 Verbesserungspaeter:
 
@@ -342,10 +449,9 @@ Vermutung:
   abbrechen statt still weiterzulaufen
 - Farm-Loop spaeter als expliziten Zustandsautomaten umbauen, damit Mobs immer
   vor Waypoints priorisiert werden und das aktuelle Ziel stabil verfolgt wird
-- Fallback-Suchstrategie fuer `item-search.lua` verbessern
+- Farm-Skript spaeter um echte aktuelle Territory-Pruefung erweitern
 - eventuell C#-seitiges HTTP-Modul fuer SND bauen, um PowerShell komplett zu vermeiden
-- optional Caching fuer XIVAPI-Antworten einfuehren
-- `monster-builder.lua` ggf. um mehrere Drops pro Monster erweitern
+- optional SND-HTTP weiter reduzieren und alte XIVAPI-Tools abloesen
 - `positions-helper.lua` und `monster-builder.lua` koennen noch gemeinsame Helper teilen
 
 ## Entwicklung

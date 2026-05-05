@@ -1,9 +1,9 @@
 --[=====[
 [[SND Metadata]]
 author: Jopo-JP
-version: 6.0.0
+version: 7.0.0
 description: >-
-  Modulares Farm Script - Farmt Items automatisch via Monster-Datenbank.
+  Modulares Farm Script - Farmt Items automatisch via Farm-Quellen-Datenbank.
   Konfiguration über SND Config-UI.
 plugin_dependencies:
 - BossModReborn
@@ -16,6 +16,11 @@ configs:
     description: Item-Name ODER Item-ID (Zahl)
     type: string
     required: true
+  farmSource:
+    default: ""
+    description: Optionale Farm-Source key, falls mehrere Quellen dasselbe Item droppen
+    type: string
+    required: false
   farmQty:
     default: 100
     description: Wie viele Items TOTAL gesammelt werden sollen
@@ -58,7 +63,7 @@ configs:
 [[End Metadata]]
 --]=====]
 -- ======================================================================
--- Farm Script v6.0 - Modular
+-- Farm Script v7.0 - Modular, ID-basierte Farm-Quellen
 -- ======================================================================
 
 -- Module laden
@@ -68,12 +73,13 @@ local entity    = require("lib/entity")
 local nav       = require("lib/nav")
 local combat    = require("lib/combat")
 local inventory = require("lib/inventory")
-local MONSTER_DB = require("data/monsters")
+local farmDb    = require("lib/farm_db")
 
 -- ======================================================================
 -- Konfiguration aus SND Config-UI laden
 -- ======================================================================
 local FARM_ITEM       = Config.Get("farmItem")
+local FARM_SOURCE     = Config.Get("farmSource") or ""
 local FARM_QTY        = Config.Get("farmQty")
 
 -- Module mit Konfiguration initialisieren
@@ -87,40 +93,63 @@ nav.DETECTION_RANGE    = Config.Get("detectionRange")
 -- Farm-Target Auflösung
 -- ======================================================================
 
---- Findet das Monster und Drop in der Datenbank.
+--- Gibt alle verfuegbaren Farm-Quellen aus.
+local function logAvailableSources(itemId)
+    local sources = itemId and farmDb.findCandidatesByItem(itemId) or farmDb.sources()
+    for _, source in ipairs(sources) do
+        local itemLabels = {}
+        for _, id in ipairs(source.item_ids) do
+            itemLabels[#itemLabels + 1] = string.format("%s (ID:%d)", farmDb.itemDisplayName(id), id)
+        end
+        log.error("  %s | %s | Drops: %s", source.key, farmDb.sourceLabel(source), table.concat(itemLabels, ", "))
+    end
+end
+
+--- Findet Farm-Quelle und Drop in der Datenbank.
 -- Unterstuetzt Suche per Item-ID (Zahl) oder Item-Name (alle Sprachen).
 -- @param farmItem string|number Item-Name oder Item-ID
--- @return table|nil monster, number itemId, string itemName
-local function resolveFarmTarget(farmItem)
+-- @param farmSource string|nil Optionale Source-Auswahl per key
+-- @return table|nil source, number itemId, string itemName
+local function resolveFarmTarget(farmItem, farmSource)
     local itemId = 0
     local itemName = ""
 
     if tonumber(farmItem) then
-        -- Numerische ID
         itemId = tonumber(farmItem)
-        for _, m in ipairs(MONSTER_DB) do
-            for _, d in ipairs(m.drops) do
-                if d.id == itemId then
-                    itemName = utils.displayName(d.name)
-                    return m, itemId, itemName
-                end
-            end
-        end
-        itemName = "Item#" .. itemId
+        itemName = farmDb.itemDisplayName(itemId)
     else
-        -- String-Name: Suche in allen Sprachen
-        itemName = farmItem
-        for _, m in ipairs(MONSTER_DB) do
-            for _, d in ipairs(m.drops) do
-                local match, lang = utils.matchMultiName(d.name, farmItem)
-                if match then
-                    log.info("Item '%s' gefunden (Sprache: %s)", farmItem, lang or "?")
-                    return m, d.id, utils.displayName(d.name)
-                end
-            end
+        local lang
+        itemId, itemName, lang = farmDb.findItemByName(farmItem)
+        if itemId then
+            log.info("Item '%s' gefunden (Sprache: %s, ID:%d)", farmItem, lang or "?", itemId)
         end
     end
 
+    if itemId == 0 or not itemId then
+        return nil, 0, tostring(farmItem)
+    end
+
+    local candidates = farmDb.findCandidatesByItem(itemId)
+    if #candidates == 0 then
+        return nil, itemId, itemName
+    end
+
+    if farmSource and farmSource ~= "" then
+        local selected = farmDb.findSourceByKey(farmSource, candidates)
+        if selected then return selected, itemId, itemName end
+        log.error("farmSource '%s' passt nicht zu Item '%s' (ID:%d).", farmSource, itemName, itemId)
+        return nil, itemId, itemName
+    end
+
+    if #candidates == 1 then
+        return candidates[1], itemId, itemName
+    end
+
+    log.error("Mehrere Farm-Quellen fuer '%s' (ID:%d) gefunden.", itemName, itemId)
+    log.error("Bitte farmSource setzen:")
+    for _, source in ipairs(candidates) do
+        log.error("  farmSource = \"%s\"  -- %s", source.key, farmDb.sourceLabel(source))
+    end
     return nil, itemId, itemName
 end
 
@@ -128,27 +157,45 @@ end
 -- Main
 -- ======================================================================
 local ok, err = xpcall(function()
-    log.info("=== FARM v6.0 ===")
+    log.info("=== FARM v7.0 ===")
 
     -- 1. Farm-Target auflösen
-    local monster, farmItemId, farmItemName = resolveFarmTarget(FARM_ITEM)
-    if not monster then
-        log.error("ABBRUCH: Kein Monster fuer '%s' in MONSTER_DB gefunden!", tostring(FARM_ITEM))
-        log.error("Verfuegbare Items:")
-        for _, m in ipairs(MONSTER_DB) do
-            for _, d in ipairs(m.drops) do
-                log.error("  %s -> %s (ID:%d)", m.name, utils.displayName(d.name), d.id)
-            end
-        end
+    local source, farmItemId, farmItemName = resolveFarmTarget(FARM_ITEM, FARM_SOURCE)
+    if not source then
+        log.error("ABBRUCH: Keine eindeutige Farm-Quelle fuer '%s' gefunden!", tostring(FARM_ITEM))
+        log.error("Verfuegbare Farm-Quellen:")
+        logAvailableSources(farmItemId ~= 0 and farmItemId or nil)
         return
     end
 
-    local mobName   = monster.name
-    local mobLabel  = utils.displayName(monster.name)
-    local waypoints = monster.waypoints
+    local mobName   = source.name
+    local mobLabel  = utils.displayName(source.name)
+    local waypoints = source.waypoints
+
+    if source.missing and source.missing.bnpc_name then
+        log.error("ABBRUCH: BNpcName ID %s fehlt in data/generated/bnpc_names.lua.", tostring(source.bnpc_name_id))
+        log.error("Exporter ausfuehren: python tools/export_xivapi_data.py export --mobs %s", tostring(source.bnpc_name_id))
+        return
+    end
+
+    if source.missing and #source.missing.items > 0 then
+        log.warn("Einige item_ids fehlen in data/generated/items.lua: %s", table.concat(source.missing.items, ","))
+        log.warn("Exporter ausfuehren: python tools/export_xivapi_data.py export --items %s", table.concat(source.missing.items, ","))
+    end
+
+    if not waypoints or #waypoints == 0 then
+        log.error("ABBRUCH: Farm-Quelle '%s' hat keine Waypoints.", source.key)
+        return
+    end
 
     log.info("Farm: %d x '%s' (ID:%d)", FARM_QTY, farmItemName, farmItemId)
+    log.info("Quelle: %s", source.key)
     log.info("Monster: %s | Waypoints: %d", mobLabel, #waypoints)
+    if source.territory then
+        log.info("Zone: %s (Territory:%d)", utils.displayName(source.territory.name), source.territory_id)
+    elseif source.territory_id then
+        log.info("Territory: %d", source.territory_id)
+    end
     log.info("Pull: %s | Kill-Range: %dy | Scan: %dy",
         combat.PULL_SKILL, combat.KILL_RANGE, combat.SCAN_RANGE)
 
