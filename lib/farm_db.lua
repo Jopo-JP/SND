@@ -21,6 +21,40 @@ local function copyArray(source)
     return out
 end
 
+local function resolveSpawnWaypoints(source, missing)
+    local waypoints = copyArray(source.waypoints)
+    if #waypoints > 0 then return waypoints end
+
+    if not source.territory_id or not source.bnpc_base_ids then
+        return waypoints
+    end
+
+    local seen = {}
+    for _, bnpcBaseId in ipairs(source.bnpc_base_ids) do
+        local spawnData = game_data.getSpawnPoints(source.territory_id, bnpcBaseId)
+        if not spawnData then
+            missing.spawn_points[#missing.spawn_points + 1] = bnpcBaseId
+        end
+
+        for _, point in ipairs((spawnData and spawnData.points) or {}) do
+            local key = string.format("%.1f:%.1f:%.1f", point.x or 0, point.y or 0, point.z or 0)
+            if not seen[key] then
+                waypoints[#waypoints + 1] = {
+                    x = point.x,
+                    y = point.y,
+                    z = point.z,
+                    radius = point.radius,
+                    level_id = point.level_id,
+                    bnpc_base_id = bnpcBaseId,
+                }
+                seen[key] = true
+            end
+        end
+    end
+
+    return waypoints
+end
+
 local function resolveLegacyItemIds(source)
     local itemIds = {}
     local seen = {}
@@ -53,7 +87,7 @@ end
 local function resolveSource(source)
     local bnpcNameId = source.bnpc_name_id or source.name_id
     local mobName = source.name
-    local missing = { items = {} }
+    local missing = { items = {}, spawn_points = {} }
 
     if bnpcNameId then
         local generatedName = game_data.getBnpcSingular(bnpcNameId)
@@ -100,7 +134,8 @@ local function resolveSource(source)
         territory = territory,
         item_ids = itemIds,
         drops = drops,
-        waypoints = copyArray(source.waypoints),
+        bnpc_base_ids = copyArray(source.bnpc_base_ids),
+        waypoints = resolveSpawnWaypoints(source, missing),
         missing = missing,
         raw = source,
     }

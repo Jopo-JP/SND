@@ -40142,5 +40142,80 @@
         "last_checked_at": "2026-05-05T13:20:16+00:00"
       }
     }
+  },
+  "spawn_points": {
+    "397:5537": {
+      "territory_id": 397,
+      "bnpc_base_id": 5537,
+      "points": [
+        {
+          "level_id": 6185518,
+          "x": 331.271,
+          "y": 186.533,
+          "z": 432.023,
+          "yaw": 0.525637,
+          "radius": 6.0,
+          "bnpc_base_id": 5537,
+          "territory_id": 397,
+          "map_id": 211
+        }
+      ]
+    },
+    "397:5538": {
+      "territory_id": 397,
+      "bnpc_base_id": 5538,
+      "points": [
+        {
+          "level_id": 6185517,
+          "x": 338.765,
+          "y": 186.642,
+          "z": 433.476,
+          "yaw": 0.0368645,
+          "radius": 6.0,
+          "bnpc_base_id": 5538,
+          "territory_id": 397,
+          "map_id": 211
+        },
+        {
+          "level_id": 6185519,
+          "x": 325.552,
+          "y": 185.926,
+          "z": 440.165,
+          "yaw": 1.37039,
+          "radius": 6.0,
+          "bnpc_base_id": 5538,
+          "territory_id": 397,
+          "map_id": 211
+        }
+      ]
+    },
+    "397:5539": {
+      "territory_id": 397,
+      "bnpc_base_id": 5539,
+      "points": [
+        {
+          "level_id": 6200474,
+          "x": 434.864,
+          "y": 166.129,
+          "z": 354.401,
+          "yaw": 2.66085,
+          "radius": 6.0,
+          "bnpc_base_id": 5539,
+          "territory_id": 397,
+          "map_id": 211
+        },
+        {
+          "level_id": 6200475,
+          "x": 440.78,
+          "y": 165.04,
+          "z": 331.358,
+          "yaw": -0.0353735,
+          "radius": 6.0,
+          "bnpc_base_id": 5539,
+          "territory_id": 397,
+          "map_id": 211
+        }
+      ]
+    }
   }
 }

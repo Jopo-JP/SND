@@ -15,6 +15,7 @@ M.bnpc_names  = safeRequire("data/generated/bnpc_names")
 M.territories = safeRequire("data/generated/territories")
 M.maps        = safeRequire("data/generated/maps")
 M.place_names = safeRequire("data/generated/place_names")
+M.spawn_points = safeRequire("data/generated/spawn_points")
 
 local function getById(source, id)
     id = tonumber(id)
@@ -40,6 +41,13 @@ end
 
 function M.getPlaceName(id)
     return getById(M.place_names, id)
+end
+
+function M.getSpawnPoints(territoryId, bnpcBaseId)
+    territoryId = tonumber(territoryId)
+    bnpcBaseId = tonumber(bnpcBaseId)
+    if not territoryId or not bnpcBaseId then return nil end
+    return M.spawn_points[tostring(territoryId) .. ":" .. tostring(bnpcBaseId)]
 end
 
 function M.getItemName(id)
